@@ -1,4 +1,4 @@
-import type { DetailViewMode, PaneFocus } from '../types.js'
+import type { DetailViewMode, PaneFocus, ReplMode } from '../types.js'
 
 export interface AppState {
   cwd: string
@@ -9,6 +9,8 @@ export interface AppState {
   helpOpen: boolean
   reverse: boolean
   follow: boolean
+  replMode: ReplMode
+  queryText: string
   detailViewMode: DetailViewMode
   detailCursorIndex: number
 }
@@ -50,6 +52,8 @@ export function createInitialAppState(cwd: string): AppState {
     helpOpen: false,
     reverse: false,
     follow: true,
+    replMode: 'browse',
+    queryText: '',
     detailViewMode: 'tree',
     detailCursorIndex: 0,
   }

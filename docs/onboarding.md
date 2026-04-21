@@ -23,3 +23,11 @@ The TUI should stay responsive under continuous input by:
 - using ring buffers
 - virtualizing the left list
 - keeping follow mode separate from manual navigation
+
+Current MVP also includes a simple interactive filter mode:
+
+- press `/`
+- type query terms
+- `field:value` for exact field filters
+- `field~value` for substring field filters
+- bare terms perform substring matches against message/raw/source

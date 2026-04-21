@@ -1,6 +1,7 @@
 import React from 'react'
 import { Text } from 'ink'
-import type { LogEntry } from '../types.js'
+import type { LogEntry, LoggerColumn } from '../types.js'
+import { getJsonPathValue } from '../lib/query/jsonPath.js'
 
 function colorForLevel(level: LogEntry['level']): string {
   switch (level) {
@@ -35,9 +36,18 @@ export function LogListRow(props: {
   entry: LogEntry
   selected: boolean
   width: number
+  columns?: LoggerColumn[]
 }): React.ReactElement {
   const prefix = props.entry.prefix ? `${props.entry.prefix} ` : ''
-  const rawText = `${compactTime(props.entry)} ${props.entry.level.toUpperCase().padEnd(5)} ${prefix}${props.entry.message}`
+  const columnText = (props.columns ?? [])
+    .map((column) => {
+      const value = getJsonPathValue(props.entry.parsed, column.path)
+      return value === undefined ? '' : `${column.key}=${String(value)}`
+    })
+    .filter(Boolean)
+    .join(' ')
+
+  const rawText = `${compactTime(props.entry)} ${props.entry.level.toUpperCase().padEnd(5)} ${prefix}${props.entry.message}${columnText ? ` ${columnText}` : ''}`
   const text = rawText.length > props.width ? `${rawText.slice(0, Math.max(0, props.width - 3))}...` : rawText
 
   return (

@@ -17,6 +17,16 @@ export interface LoggerCliOptions {
   cmd?: string
   maxEntries: number
   preserveAnsi: boolean
+  merge: boolean
+}
+
+export interface LoggerColumn {
+  key: string
+  path: string
+}
+
+export interface LoggerConfig {
+  columns: LoggerColumn[]
 }
 
 export interface LogEntry {
@@ -63,4 +73,7 @@ export interface SourceSnapshot {
 export interface LoggerSnapshot {
   version: number
   sources: SourceSnapshot[]
+  config: LoggerConfig
 }
+
+export type ReplMode = 'browse' | 'filter' | 'detail-search'

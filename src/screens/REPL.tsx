@@ -2,16 +2,20 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import { Header } from '../components/Header.js'
 import { Footer } from '../components/Footer.js'
+import { FilterBar } from '../components/FilterBar.js'
 import { HelpModal } from '../components/HelpModal.js'
 import { JsonTree } from '../components/JsonTree.js'
 import { LogListRow } from '../components/LogListRow.js'
 import { RawTextView } from '../components/RawTextView.js'
+import { SearchBar } from '../components/SearchBar.js'
 import { StatusLine } from '../components/StatusLine.js'
 import { VirtualSelectableList } from '../components/VirtualSelectableList.js'
 import { useAppState, useAppStateStore } from '../state/AppState.js'
 import { useTerminalSize } from '../hooks/useTerminalSize.js'
 import { QueryEngine, type LoggerSession } from '../QueryEngine.js'
 import { clampIndex, getBottomIndex, shouldFollowSelection } from '../query.js'
+import { findJsonTreeMatch, getJsonTreeCopyValue } from '../lib/query/detailTools.js'
+import { matchesQuery, parseQuery } from '../lib/query/filter.js'
 import type { JsonTreeLine, LoggerCliOptions, LogEntry } from '../types.js'
 
 function flattenJson(value: unknown, foldState: Set<string>, path = '$', depth = 0, key?: string): JsonTreeLine[] {
@@ -70,12 +74,15 @@ export function REPL(props: {
   const helpOpen = useAppState((state) => state.helpOpen)
   const reverse = useAppState((state) => state.reverse)
   const follow = useAppState((state) => state.follow)
+  const replMode = useAppState((state) => state.replMode)
+  const queryText = useAppState((state) => state.queryText)
   const detailCursorIndex = useAppState((state) => state.detailCursorIndex)
   const detailViewMode = useAppState((state) => state.detailViewMode)
   const terminal = useTerminalSize()
   const [session, setSession] = useState<LoggerSession | null>(null)
   const [version, setVersion] = useState(0)
   const [foldState, setFoldState] = useState<Set<string>>(new Set())
+  const [detailSearchText, setDetailSearchText] = useState('')
   const sessionRef = React.useRef<LoggerSession | null>(null)
 
   useEffect(() => {
@@ -101,11 +108,17 @@ export function REPL(props: {
     }
   }, [])
 
-  const snapshot = session?.getSnapshot() ?? { version: 0, sources: [] }
+  const snapshot = session?.getSnapshot() ?? { version: 0, sources: [], config: { columns: [] } }
   const activeSource = snapshot.sources[activeTabIndex]
-  const activeEntries = useMemo(
+  const columns = snapshot.config?.columns ?? []
+  const allEntries = useMemo(
     () => (activeSource ? session?.getEntries(activeSource.spec.id, reverse) ?? [] : []),
     [session, activeSource?.spec.id, reverse, version],
+  )
+  const queryClauses = useMemo(() => parseQuery(queryText), [queryText])
+  const activeEntries = useMemo(
+    () => (queryClauses.length === 0 ? allEntries : allEntries.filter((entry) => matchesQuery(entry, queryClauses))),
+    [allEntries, queryClauses],
   )
 
   useEffect(() => {
@@ -159,8 +172,27 @@ export function REPL(props: {
       return
     }
 
+    if (replMode === 'filter') {
+      if (key.escape) {
+        store.setState({ replMode: 'browse' })
+      }
+      return
+    }
+
+    if (replMode === 'detail-search') {
+      if (key.escape) {
+        store.setState({ replMode: 'browse' })
+      }
+      return
+    }
+
     if (extendedKey.f1 || input === '?') {
       store.setState({ helpOpen: true })
+      return
+    }
+
+    if (input === '/') {
+      store.setState({ replMode: 'filter' })
       return
     }
 
@@ -199,6 +231,10 @@ export function REPL(props: {
     }
 
     if (paneFocus === 'detail' && selectedEntry?.kind === 'json') {
+      if (input === '?') {
+        store.setState({ replMode: 'detail-search' })
+        return
+      }
       if (key.escape) {
         store.setState({ paneFocus: 'list' })
         return
@@ -224,6 +260,20 @@ export function REPL(props: {
             else next.add(line.id)
             return next
           })
+        }
+      }
+      if (input === 'y') {
+        const line = treeLines[detailCursorIndex]
+        if (line) {
+          const text = getJsonTreeCopyValue(line, 'value')
+          void Bun.write(Bun.stdout, `\n[copied value] ${text}\n`)
+        }
+      }
+      if (input === 'p') {
+        const line = treeLines[detailCursorIndex]
+        if (line) {
+          const text = getJsonTreeCopyValue(line, 'path')
+          void Bun.write(Bun.stdout, `\n[copied path] ${text}\n`)
         }
       }
       return
@@ -277,7 +327,48 @@ export function REPL(props: {
   return (
     <Box flexDirection="column">
       <StatusLine />
-      <Header sources={snapshot.sources} activeTabIndex={activeTabIndex} />
+      <Header
+        sources={snapshot.sources}
+        activeTabIndex={activeTabIndex}
+        filteredCount={activeEntries.length}
+        queryText={queryText}
+        columns={columns}
+      />
+      {replMode === 'filter' ? (
+        <FilterBar
+          value={queryText}
+          onChange={(value) => {
+            store.setState({
+              queryText: value,
+              selectedIndex: 0,
+              follow: false,
+            })
+          }}
+          onSubmit={() => {
+            store.setState({ replMode: 'browse' })
+          }}
+        />
+      ) : null}
+      {replMode === 'detail-search' ? (
+        <SearchBar
+          value={detailSearchText}
+          label="?"
+          onChange={(value) => {
+            setDetailSearchText(value)
+            const nextIndex = findJsonTreeMatch(treeLines, value, 0)
+            if (nextIndex >= 0) {
+              store.setState({ detailCursorIndex: nextIndex })
+            }
+          }}
+          onSubmit={(value) => {
+            const nextIndex = findJsonTreeMatch(treeLines, value, detailCursorIndex + 1)
+            if (nextIndex >= 0) {
+              store.setState({ detailCursorIndex: nextIndex })
+            }
+            store.setState({ replMode: 'browse' })
+          }}
+        />
+      ) : null}
       {helpOpen ? <HelpModal /> : null}
       <Box flexDirection="row">
         <Box flexDirection="column" width={listWidth}>
@@ -291,6 +382,7 @@ export function REPL(props: {
                 entry={entry}
                 selected={index === selectedIndex}
                 width={listWidth - 3}
+                columns={columns}
               />
             )}
           />
@@ -305,7 +397,7 @@ export function REPL(props: {
           )}
         </Box>
       </Box>
-      <Footer follow={follow} paneFocus={paneFocus} />
+      <Footer follow={follow} paneFocus={paneFocus} replMode={replMode} />
     </Box>
   )
 }

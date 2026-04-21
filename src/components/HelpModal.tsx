@@ -10,6 +10,10 @@ export function HelpModal(): React.ReactElement {
       <Text>Home/End or g/G: jump</Text>
       <Text>Tab / Shift+Tab: switch source tabs</Text>
       <Text>Enter: toggle detail focus</Text>
+      <Text>/ : enter filter mode</Text>
+      <Text>? in detail: search detail pane</Text>
+      <Text>y: copy selected JSON value preview</Text>
+      <Text>p: copy selected JSON path</Text>
       <Text>Esc: back</Text>
       <Text>Space: toggle fold on JSON node</Text>
       <Text>R: reverse order</Text>

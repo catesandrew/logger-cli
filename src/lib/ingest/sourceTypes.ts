@@ -10,3 +10,8 @@ export interface SourceCallbacks {
   onError(error: Error): void
   onEnd(): void
 }
+
+export interface FileSourceOptions {
+  follow?: boolean
+  pollIntervalMs?: number
+}

@@ -1,0 +1,7 @@
+{
+  // Example config for logger
+  "columns": [
+    { "key": "client", "path": "$.client" },
+    { "key": "path", "path": "$.request.path" }
+  ]
+}

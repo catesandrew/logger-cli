@@ -3,12 +3,24 @@ import type { LoggerCliOptions, SourceSpec } from '../../types.js'
 
 export function createSourceSpecs(options: LoggerCliOptions, stdinIsTty: boolean): SourceSpec[] {
   if (options.files.length > 0) {
-    return options.files.map((file, index) => ({
+    const fileSpecs: SourceSpec[] = options.files.map((file, index) => ({
       id: `file-${index}`,
       label: path.basename(file),
       type: 'file',
       location: file,
     }))
+    if (options.merge && fileSpecs.length > 1) {
+      return [
+        {
+          id: 'merge-0',
+          label: 'merged',
+          type: 'file',
+          location: '__merged__',
+        } satisfies SourceSpec,
+        ...fileSpecs,
+      ]
+    }
+    return fileSpecs
   }
 
   if (options.url) {
@@ -17,7 +29,7 @@ export function createSourceSpecs(options: LoggerCliOptions, stdinIsTty: boolean
       label: 'url',
       type: 'url',
       location: options.url,
-    }]
+    } satisfies SourceSpec]
   }
 
   if (options.cmd) {
@@ -26,7 +38,7 @@ export function createSourceSpecs(options: LoggerCliOptions, stdinIsTty: boolean
       label: 'cmd',
       type: 'cmd',
       location: options.cmd,
-    }]
+    } satisfies SourceSpec]
   }
 
   if (!stdinIsTty) {
@@ -35,7 +47,7 @@ export function createSourceSpecs(options: LoggerCliOptions, stdinIsTty: boolean
       label: 'stdin',
       type: 'stdin',
       location: 'stdin',
-    }]
+    } satisfies SourceSpec]
   }
 
   return []

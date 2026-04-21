@@ -20,3 +20,20 @@ export function clampIndex(index: number, length: number): number {
   }
   return Math.max(0, Math.min(index, length - 1))
 }
+
+export function mergeEntriesByTime(entries: LogEntry[], reverse: boolean): LogEntry[] {
+  const sorted = [...entries].sort((left, right) => {
+    const leftTime = left.timestampMs ?? Number.MAX_SAFE_INTEGER
+    const rightTime = right.timestampMs ?? Number.MAX_SAFE_INTEGER
+    if (leftTime !== rightTime) {
+      return leftTime - rightTime
+    }
+    return left.id - right.id
+  })
+
+  return reverse ? sorted.reverse() : sorted
+}
+
+export function createMergedEntries(entriesBySource: LogEntry[][], reverse: boolean): LogEntry[] {
+  return mergeEntriesByTime(entriesBySource.flat(), reverse)
+}

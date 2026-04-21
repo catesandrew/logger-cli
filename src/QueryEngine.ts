@@ -1,4 +1,4 @@
-import type { LoggerCliOptions, LogEntry, LoggerSnapshot, SourceSnapshot, SourceSpec } from './types.js'
+import type { LoggerCliOptions, LogEntry, LoggerSnapshot, SourceSnapshot, SourceSpec, LoggerConfig } from './types.js'
 import { createSourceSpecs } from './lib/ingest/createSources.js'
 import { RingBuffer } from './lib/ingest/ringBuffer.js'
 import { createFileSource } from './lib/ingest/fileSource.js'
@@ -7,6 +7,8 @@ import { createUrlSource } from './lib/ingest/urlSource.js'
 import { createCommandSource } from './lib/ingest/commandSource.js'
 import { parseLine } from './lib/parse/parseLine.js'
 import type { SourceCallbacks, SourceSubscription } from './lib/ingest/sourceTypes.js'
+import { loadLoggerConfig } from './lib/config/configLoader.js'
+import { createMergedEntries } from './query.js'
 
 type Listener = () => void
 
@@ -27,7 +29,11 @@ export class LoggerSession {
   private nextEntryId = 1
   private version = 0
 
-  constructor(private readonly options: LoggerCliOptions, readonly specs: SourceSpec[]) {
+  constructor(
+    private readonly options: LoggerCliOptions,
+    readonly specs: SourceSpec[],
+    private readonly config: LoggerConfig,
+  ) {
     for (const spec of specs) {
       this.sourceStates.set(spec.id, {
         spec,
@@ -46,6 +52,20 @@ export class LoggerSession {
 
   getSnapshot(): LoggerSnapshot {
     const sources: SourceSnapshot[] = this.specs.map((spec) => {
+      if (spec.id === 'merge-0') {
+        const states = this.specs
+          .filter((source) => source.id !== 'merge-0')
+          .map((source) => this.sourceStates.get(source.id))
+          .filter((state): state is SourceState => Boolean(state))
+
+        return {
+          spec,
+          total: states.reduce((sum, state) => sum + state.total, 0),
+          jsonCount: states.reduce((sum, state) => sum + state.jsonCount, 0),
+          textCount: states.reduce((sum, state) => sum + state.textCount, 0),
+        }
+      }
+
       const state = this.sourceStates.get(spec.id)
       return {
         spec,
@@ -57,15 +77,25 @@ export class LoggerSession {
     return {
       version: this.version,
       sources,
+      config: this.config,
     }
   }
 
   getEntries(sourceId: string, reverse: boolean): LogEntry[] {
+    if (sourceId === 'merge-0') {
+      const grouped = this.specs
+        .filter((spec) => spec.id !== 'merge-0')
+        .map((spec) => this.sourceStates.get(spec.id)?.buffer.toArray(false) ?? [])
+      return createMergedEntries(grouped, reverse)
+    }
     return this.sourceStates.get(sourceId)?.buffer.toArray(reverse) ?? []
   }
 
   async start(): Promise<void> {
     for (const spec of this.specs) {
+      if (spec.id === 'merge-0') {
+        continue
+      }
       const callbacks: SourceCallbacks = {
         onLine: (line) => this.enqueueLine(spec, line),
         onError: () => this.flush(),
@@ -160,7 +190,8 @@ export class LoggerSession {
 export class QueryEngine {
   async start(options: LoggerCliOptions): Promise<LoggerSession> {
     const specs = createSourceSpecs(options, process.stdin.isTTY ?? false)
-    const session = new LoggerSession(options, specs)
+    const config = await loadLoggerConfig()
+    const session = new LoggerSession(options, specs, config)
     await session.start()
     return session
   }

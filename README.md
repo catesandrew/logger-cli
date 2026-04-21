@@ -17,6 +17,18 @@ bun install
 bun run dev -- examples/mixed.log
 ```
 
+## Quick Start
+
+From the repo root:
+
+```bash
+cd /usr/local/personal/logger-cli
+bun install
+bun run dev -- examples/mixed.log
+```
+
+That starts the interactive TUI immediately.
+
 Open multiple files as tabs:
 
 ```bash
@@ -41,6 +53,28 @@ Stream from a command:
 bun run dev -- --cmd "docker logs -f my-container 2>&1"
 ```
 
+Use config-driven columns:
+
+```bash
+cp examples/.logger.jsonc ./.logger.jsonc
+bun run dev -- examples/mixed.log
+```
+
+Built CLI:
+
+```bash
+bun run build
+bun run start -- examples/mixed.log
+./bin/logger examples/mixed.log
+```
+
+Compiled executable:
+
+```bash
+bun run compile:exe
+./bin/logger examples/mixed.log
+```
+
 ## Keybindings
 
 - `Up` / `Down` or `j` / `k`: move selection
@@ -51,6 +85,7 @@ bun run dev -- --cmd "docker logs -f my-container 2>&1"
 - `Shift+Tab`: previous source tab
 - `Enter`: toggle detail focus
 - `Esc`: leave detail focus / close help
+- `/`: open filter mode
 - `Space`: fold/unfold current JSON node in detail pane
 - `R`: reverse order
 - `F1` or `?`: help
@@ -75,4 +110,5 @@ bun run compile:exe
 - `src/query.ts`: view transform helpers
 - `src/lib/ingest`: sources and ring buffer
 - `src/lib/parse`: mixed JSON/text parsing
-
+- `src/lib/query`: interactive filter logic
+- `src/lib/config`: config loading
