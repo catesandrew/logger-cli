@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { Box, Text } from 'ink'
 import type { JsonTreeLine } from '../types.js'
+import { splitHighlightedText } from '../lib/query/highlight.js'
 
 function formatScalar(value: unknown): string {
   if (typeof value === 'string') return JSON.stringify(value)
@@ -58,6 +59,7 @@ export function JsonTree(props: {
   value: unknown
   foldState: Set<string>
   selectedIndex: number
+  searchText?: string
 }): React.ReactElement {
   const lines = useMemo(() => buildTreeLines(props.value, props.foldState), [props.value, props.foldState])
 
@@ -71,7 +73,15 @@ export function JsonTree(props: {
         >
           {' '.repeat(line.depth * 2)}
           {line.collapsible ? (line.collapsed ? '▶ ' : '▼ ') : '  '}
-          {line.valuePreview}
+          {splitHighlightedText(line.valuePreview, props.searchText ?? '').segments.map((segment, segmentIndex) => (
+            <Text
+              key={`${line.id}-${segmentIndex}`}
+              color={index === props.selectedIndex ? 'black' : segment.highlighted ? 'yellow' : 'white'}
+              backgroundColor={index === props.selectedIndex ? 'cyan' : undefined}
+            >
+              {segment.text}
+            </Text>
+          ))}
         </Text>
       ))}
     </Box>

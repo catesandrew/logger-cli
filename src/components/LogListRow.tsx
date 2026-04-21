@@ -2,6 +2,7 @@ import React from 'react'
 import { Text } from 'ink'
 import type { LogEntry, LoggerColumn } from '../types.js'
 import { getJsonPathValue } from '../lib/query/jsonPath.js'
+import { formatSourceLabel } from '../lib/query/sourceLabel.js'
 
 function colorForLevel(level: LogEntry['level']): string {
   switch (level) {
@@ -37,8 +38,15 @@ export function LogListRow(props: {
   selected: boolean
   width: number
   columns?: LoggerColumn[]
+  mergedMode?: boolean
+  sourceLabel?: string
 }): React.ReactElement {
   const prefix = props.entry.prefix ? `${props.entry.prefix} ` : ''
+  const labeledMessage = formatSourceLabel(
+    Boolean(props.mergedMode),
+    props.sourceLabel ?? props.entry.sourceId,
+    `${prefix}${props.entry.message}`,
+  )
   const columnText = (props.columns ?? [])
     .map((column) => {
       const value = getJsonPathValue(props.entry.parsed, column.path)
@@ -47,7 +55,7 @@ export function LogListRow(props: {
     .filter(Boolean)
     .join(' ')
 
-  const rawText = `${compactTime(props.entry)} ${props.entry.level.toUpperCase().padEnd(5)} ${prefix}${props.entry.message}${columnText ? ` ${columnText}` : ''}`
+  const rawText = `${compactTime(props.entry)} ${props.entry.level.toUpperCase().padEnd(5)} ${labeledMessage}${columnText ? ` ${columnText}` : ''}`
   const text = rawText.length > props.width ? `${rawText.slice(0, Math.max(0, props.width - 3))}...` : rawText
 
   return (

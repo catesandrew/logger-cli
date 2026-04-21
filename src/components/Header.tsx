@@ -8,6 +8,9 @@ export function Header(props: {
   filteredCount: number
   queryText: string
   columns: LoggerColumn[]
+  detailSearchText?: string
+  detailMatchCount?: number
+  mergedMode?: boolean
 }): React.ReactElement {
   const active = props.sources[props.activeTabIndex]
   const total = active?.total ?? 0
@@ -24,6 +27,12 @@ export function Header(props: {
       </Box>
       {props.queryText ? (
         <Text color="yellow">filter: {props.queryText}</Text>
+      ) : null}
+      {props.detailSearchText ? (
+        <Text color="magenta">detail search: {props.detailSearchText} ({props.detailMatchCount ?? 0} matches)</Text>
+      ) : null}
+      {props.mergedMode ? (
+        <Text color="gray">merge: chronological view across active sources</Text>
       ) : null}
       {props.columns.length > 0 ? (
         <Text color="gray">columns: {props.columns.map((column) => `${column.key}=${column.path}`).join(', ')}</Text>

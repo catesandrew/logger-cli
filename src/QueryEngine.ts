@@ -78,6 +78,7 @@ export class LoggerSession {
       version: this.version,
       sources,
       config: this.config,
+      merged: this.specs.some((spec) => spec.id === 'merge-0'),
     }
   }
 

@@ -17,6 +17,7 @@ import { QueryEngine, type LoggerSession } from '../QueryEngine.js'
 import { clampIndex, getBottomIndex, shouldFollowSelection } from '../query.js'
 import { findJsonTreeMatch, getJsonTreeCopyValue } from '../lib/query/detailTools.js'
 import { matchesQuery, parseQuery } from '../lib/query/filter.js'
+import { splitHighlightedText } from '../lib/query/highlight.js'
 import type { JsonTreeLine, LoggerCliOptions, LogEntry } from '../types.js'
 
 function flattenJson(value: unknown, foldState: Set<string>, path = '$', depth = 0, key?: string): JsonTreeLine[] {
@@ -110,9 +111,10 @@ export function REPL(props: {
     }
   }, [])
 
-  const snapshot = session?.getSnapshot() ?? { version: 0, sources: [], config: { columns: [] } }
+  const snapshot = session?.getSnapshot() ?? { version: 0, sources: [], config: { columns: [] }, merged: false }
   const activeSource = snapshot.sources[activeTabIndex]
   const columns = snapshot.config?.columns ?? []
+  const mergedMode = Boolean(snapshot.merged && activeSource?.spec.id === 'merge-0')
   const allEntries = useMemo(
     () => (activeSource ? session?.getEntries(activeSource.spec.id, reverse) ?? [] : []),
     [session, activeSource?.spec.id, reverse, version],
@@ -143,6 +145,17 @@ export function REPL(props: {
     () => (selectedEntry?.kind === 'json' ? flattenJson(selectedEntry.parsed, foldState) : []),
     [selectedEntry, foldState],
   )
+  const detailMatchCount = useMemo(() => {
+    if (!detailSearchText) {
+      return 0
+    }
+
+    if (selectedEntry?.kind === 'json') {
+      return treeLines.reduce((sum, line) => sum + splitHighlightedText(line.valuePreview, detailSearchText).matchCount, 0)
+    }
+
+    return selectedEntry ? splitHighlightedText(selectedEntry.raw, detailSearchText).matchCount : 0
+  }, [detailSearchText, selectedEntry, treeLines])
 
   function moveSelection(delta: number) {
     store.setState((current) => {
@@ -352,6 +365,9 @@ export function REPL(props: {
         filteredCount={activeEntries.length}
         queryText={queryText}
         columns={columns}
+        detailSearchText={detailSearchText}
+        detailMatchCount={detailMatchCount}
+        mergedMode={mergedMode}
       />
       {replMode === 'filter' ? (
         <FilterBar
@@ -403,6 +419,8 @@ export function REPL(props: {
                 selected={index === selectedIndex}
                 width={listWidth - 3}
                 columns={columns}
+                mergedMode={mergedMode}
+                sourceLabel={snapshot.sources.find((source) => source.spec.id === entry.sourceId)?.spec.label}
               />
             )}
           />
@@ -411,9 +429,14 @@ export function REPL(props: {
           {!selectedEntry ? (
             <Text color="gray">No entry selected</Text>
           ) : selectedEntry.kind === 'json' && detailViewMode === 'tree' ? (
-            <JsonTree value={selectedEntry.parsed} foldState={foldState} selectedIndex={detailCursorIndex} />
+            <JsonTree
+              value={selectedEntry.parsed}
+              foldState={foldState}
+              selectedIndex={detailCursorIndex}
+              searchText={detailSearchText}
+            />
           ) : (
-            <RawTextView text={selectedEntry.raw} />
+            <RawTextView text={selectedEntry.raw} searchText={detailSearchText} />
           )}
         </Box>
       </Box>

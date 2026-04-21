@@ -74,6 +74,7 @@ export interface LoggerSnapshot {
   version: number
   sources: SourceSnapshot[]
   config: LoggerConfig
+  merged: boolean
 }
 
 export type ReplMode = 'browse' | 'filter' | 'detail-search'
