@@ -10,6 +10,7 @@ export function buildProgram(): Command {
     .option('--max <count>', 'Maximum entries to keep in memory', '50000')
     .option('--merge', 'Merge multiple sources into a single chronological view', false)
     .option('--merge-sort <mode>', 'Sort merged view by time or source', 'time')
+    .option('--config <path>', 'Load config from an explicit path')
     .option('--preserve-ansi', 'Preserve ANSI in raw text detail view', false)
 }
 
@@ -22,6 +23,7 @@ export function parseCli(argv: string[]): LoggerCliOptions {
     max: string
     merge?: boolean
     mergeSort?: 'time' | 'source'
+    config?: string
     preserveAnsi?: boolean
   }>()
 
@@ -32,6 +34,7 @@ export function parseCli(argv: string[]): LoggerCliOptions {
     maxEntries: Number.parseInt(options.max, 10) || 50000,
     merge: Boolean(options.merge),
     mergeSort: options.mergeSort === 'source' ? 'source' : 'time',
+    configPath: options.config,
     preserveAnsi: Boolean(options.preserveAnsi),
   }
 }

@@ -1,4 +1,4 @@
-import type { ParsedLine } from '../../types.js'
+import type { LoggerConfig, ParsedLine } from '../../types.js'
 import { extractLevel, extractMessage, extractTime } from './heuristics.js'
 import { normalizeLevel } from './normalizeLevel.js'
 import { parsePrefixedJson } from './parsePrefixedJson.js'
@@ -11,7 +11,7 @@ function parseJson(text: string): unknown | undefined {
   }
 }
 
-export function parseLine(raw: string): ParsedLine {
+export function parseLine(raw: string, config?: LoggerConfig): ParsedLine {
   const prefixed = parsePrefixedJson(raw)
   const candidateJson = prefixed.jsonText ?? raw.trim()
   const parsed = parseJson(candidateJson)
@@ -26,6 +26,7 @@ export function parseLine(raw: string): ParsedLine {
       parsed,
       ...time,
       ...level,
+      level: normalizeLevel(level.levelRaw, config),
       message: extractMessage(record),
     }
   }
@@ -33,7 +34,7 @@ export function parseLine(raw: string): ParsedLine {
   return {
     kind: 'text',
     prefix: prefixed.prefix,
-    level: normalizeLevel(undefined),
+    level: normalizeLevel(undefined, config),
     message: raw,
   }
 }

@@ -130,7 +130,7 @@ export class LoggerSession {
   }
 
   private enqueueLine(spec: SourceSpec, raw: string): void {
-    const parsed = parseLine(raw)
+    const parsed = parseLine(raw, this.config)
     const entry: LogEntry = {
       id: this.nextEntryId++,
       sourceId: spec.id,
@@ -194,7 +194,7 @@ export class LoggerSession {
 export class QueryEngine {
   async start(options: LoggerCliOptions): Promise<LoggerSession> {
     const specs = createSourceSpecs(options, process.stdin.isTTY ?? false)
-    const config = await loadLoggerConfig()
+    const config = await loadLoggerConfig({ configPath: options.configPath })
     const session = new LoggerSession(options, specs, config)
     await session.start()
     return session

@@ -1,6 +1,8 @@
-import type { NormalizedLevel } from '../../types.js'
+import type { LoggerConfig, NormalizedLevel } from '../../types.js'
 
-export function normalizeLevel(value: unknown): NormalizedLevel {
+export function normalizeLevel(value: unknown, config?: LoggerConfig): NormalizedLevel {
+  const mapped = config?.levelMap?.[String(value)]
+  if (mapped) return mapped
   const raw = String(value ?? '').toLowerCase()
   if (raw.includes('trace')) return 'trace'
   if (raw.includes('debug')) return 'debug'

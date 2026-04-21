@@ -53,6 +53,12 @@ Stream from a command:
 bun run dev -- --cmd "docker logs -f my-container 2>&1"
 ```
 
+Load config from an explicit path:
+
+```bash
+bun run dev -- --config ./logger.jsonc examples/mixed.log
+```
+
 Merge multiple live sources:
 
 ```bash
@@ -106,6 +112,12 @@ toggleAnsi
 cycleMergeSort
 ```
 
+Config lookup order:
+
+1. `--config path`
+2. `./.logger.jsonc`
+3. `$HOME/.config/logger/config.jsonc`
+
 Built CLI:
 
 ```bash
@@ -123,6 +135,13 @@ bun run compile:exe
 
 ## Keybindings
 
+- `F` or `/`: open advanced filter bar
+- `1` trace toggle
+- `2` debug toggle
+- `3` info toggle
+- `4` warn toggle
+- `5` error toggle
+- `6` fatal toggle
 - `Up` / `Down` or `j` / `k`: move selection
 - `PgUp` / `PgDn`: page
 - `Home` / `End`: jump beginning/end
@@ -137,6 +156,109 @@ bun run compile:exe
 - `M`: cycle merge sort in merged mode
 - `F1` or `?`: help
 - `q`: quit
+
+## Filter language
+
+Examples:
+
+```text
+request.method = "GET"
+request.method != "POST"
+latency >= 100 and latency < 500
+message ~= "timeout"
+message !~= "healthcheck"
+message like "err*"
+message ~~= "request\\s+failed"
+exists(.request.method)
+not exists(.request.user)
+level in ("warn","error","fatal")
+service not in ("metrics","health")
+.request.user? = "alice"
+(request.method = "GET" and level = "warn") or message ~= "panic"
+span.[].name = "db"
+span.[1].name = "http"
+```
+
+Supported operators:
+
+- `=`
+- `!=`
+- `>`
+- `>=`
+- `<`
+- `<=`
+- `~=`
+- `!~=`
+- `like`
+- `~~=`
+- `in (...)`
+- `not in (...)`
+- `exists(...)`
+- `not exists(...)`
+- `and`
+- `or`
+- `not`
+- parentheses
+
+Notes:
+
+- Dot paths target structured JSON fields, for example `request.method`
+- Leading-dot paths like `.field` always start from the parsed JSON object
+- `field? = value` means the field is optional: absent is treated as a match
+- Text entries can still be filtered through built-in fields like `message`
+
+## Main line templates
+
+Use `mainLineTemplate` in config to control the compact list row format.
+
+Available variables:
+
+- `timestamp`
+- `level`
+- `message`
+- `prefix`
+- `json`
+- `raw`
+
+Available helpers:
+
+- `bold`
+- `red`
+- `yellow`
+- `green`
+- `cyan`
+- `blue`
+- `purple`
+- `uppercase`
+- `fixed_size`
+- `min_size`
+- `level_style`
+
+Example:
+
+```jsonc
+{
+  "mainLineTemplate": "{{timestamp}} {{level_style (min_size level 5)}} {{prefix}}{{message}}",
+  "placeholderFormat": "#{key}",
+  "contextPath": "extra_data"
+}
+```
+
+Placeholder substitution example:
+
+If `message` is:
+
+```text
+hello #{user}
+```
+
+and `json.extra_data.user` is `alice`, the rendered message becomes:
+
+```text
+hello alice
+```
+
+If `NO_COLOR` is set, the template helpers return plain text without ANSI styling.
 
 ## Scripts
 

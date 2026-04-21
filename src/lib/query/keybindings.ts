@@ -13,8 +13,14 @@ export interface KeyLike {
 
 const DEFAULT_BINDINGS: Record<KeyAction, string[]> = {
   openHelp: ['f1', '?'],
-  openFilter: ['/'],
+  openFilter: ['F', '/'],
   toggleReverse: ['R'],
+  levelTrace: ['1'],
+  levelDebug: ['2'],
+  levelInfo: ['3'],
+  levelWarn: ['4'],
+  levelError: ['5'],
+  levelFatal: ['6'],
   nextTab: ['tab'],
   prevTab: ['shift+tab'],
   moveUp: ['up', 'k'],

@@ -19,6 +19,7 @@ export interface LoggerCliOptions {
   preserveAnsi: boolean
   merge: boolean
   mergeSort: 'time' | 'source'
+  configPath?: string
 }
 
 export interface LoggerColumn {
@@ -29,6 +30,10 @@ export interface LoggerColumn {
 export interface LoggerConfig {
   columns: LoggerColumn[]
   keybindings?: Partial<Record<KeyAction, string[]>>
+  mainLineTemplate?: string
+  placeholderFormat?: string
+  contextPath?: string
+  levelMap?: Record<string, NormalizedLevel>
 }
 
 export interface LogEntry {
@@ -85,6 +90,12 @@ export type KeyAction =
   | 'openHelp'
   | 'openFilter'
   | 'toggleReverse'
+  | 'levelTrace'
+  | 'levelDebug'
+  | 'levelInfo'
+  | 'levelWarn'
+  | 'levelError'
+  | 'levelFatal'
   | 'nextTab'
   | 'prevTab'
   | 'moveUp'

@@ -89,6 +89,7 @@ export function REPL(props: {
   const [detailSearchText, setDetailSearchText] = useState('')
   const [lastDetailSearch, setLastDetailSearch] = useState('')
   const [preserveAnsi, setPreserveAnsi] = useState(props.options.preserveAnsi)
+  const [levelFilter, setLevelFilter] = useState<Set<string>>(new Set())
   const sessionRef = React.useRef<LoggerSession | null>(null)
 
   useEffect(() => {
@@ -122,10 +123,13 @@ export function REPL(props: {
     () => (activeSource ? session?.getEntries(activeSource.spec.id, reverse, mergeSort) ?? [] : []),
     [session, activeSource?.spec.id, reverse, mergeSort, version],
   )
-  const queryClauses = useMemo(() => parseQuery(queryText), [queryText])
+  const queryAst = useMemo(() => parseQuery(queryText), [queryText])
   const activeEntries = useMemo(
-    () => (queryClauses.length === 0 ? allEntries : allEntries.filter((entry) => matchesQuery(entry, queryClauses))),
-    [allEntries, queryClauses],
+    () => allEntries.filter((entry) => {
+      const levelPass = levelFilter.size === 0 || levelFilter.has(entry.level)
+      return levelPass && matchesQuery(entry, queryAst)
+    }),
+    [allEntries, levelFilter, queryAst],
   )
 
   useEffect(() => {
@@ -250,6 +254,26 @@ export function REPL(props: {
         follow: true,
       }))
       return
+    }
+
+    const levelToggleMap = [
+      ['levelTrace', 'trace'],
+      ['levelDebug', 'debug'],
+      ['levelInfo', 'info'],
+      ['levelWarn', 'warn'],
+      ['levelError', 'error'],
+      ['levelFatal', 'fatal'],
+    ] as const
+    for (const [action, level] of levelToggleMap) {
+      if (matchesBinding(action, input, extendedKey, config)) {
+        setLevelFilter((current) => {
+          const next = new Set(current)
+          if (next.has(level)) next.delete(level)
+          else next.add(level)
+          return next
+        })
+        return
+      }
     }
 
     if (mergedMode && matchesBinding('cycleMergeSort', input, extendedKey, config)) {
@@ -490,8 +514,10 @@ export function REPL(props: {
                 selected={index === selectedIndex}
                 width={listWidth - 3}
                 columns={columns}
+                config={snapshot.config}
                 mergedMode={mergedMode}
                 sourceLabel={snapshot.sources.find((source) => source.spec.id === entry.sourceId)?.spec.label}
+                searchText={queryText}
               />
             )}
           />

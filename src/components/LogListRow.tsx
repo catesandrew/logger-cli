@@ -1,6 +1,7 @@
 import React from 'react'
 import { Text } from 'ink'
-import type { LogEntry, LoggerColumn } from '../types.js'
+import type { LogEntry, LoggerColumn, LoggerConfig } from '../types.js'
+import { renderMainLine } from '../lib/format/mainLineTemplate.js'
 import { splitHighlightedText } from '../lib/query/highlight.js'
 import { getJsonPathValue } from '../lib/query/jsonPath.js'
 import { formatSourceLabel } from '../lib/query/sourceLabel.js'
@@ -39,6 +40,7 @@ export function LogListRow(props: {
   selected: boolean
   width: number
   columns?: LoggerColumn[]
+  config: LoggerConfig
   mergedMode?: boolean
   sourceLabel?: string
   searchText?: string
@@ -57,7 +59,14 @@ export function LogListRow(props: {
     .filter(Boolean)
     .join(' ')
 
-  const rawText = `${compactTime(props.entry)} ${props.entry.level.toUpperCase().padEnd(5)} ${labeledMessage}${columnText ? ` ${columnText}` : ''}`
+  const rendered = renderMainLine(
+    {
+      ...props.entry,
+      message: labeledMessage,
+    },
+    props.config,
+  )
+  const rawText = `${compactTime(props.entry)} ${rendered}${columnText ? ` ${columnText}` : ''}`
   const text = rawText.length > props.width ? `${rawText.slice(0, Math.max(0, props.width - 3))}...` : rawText
 
   return (
