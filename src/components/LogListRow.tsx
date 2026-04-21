@@ -1,6 +1,7 @@
 import React from 'react'
 import { Text } from 'ink'
 import type { LogEntry, LoggerColumn } from '../types.js'
+import { splitHighlightedText } from '../lib/query/highlight.js'
 import { getJsonPathValue } from '../lib/query/jsonPath.js'
 import { formatSourceLabel } from '../lib/query/sourceLabel.js'
 
@@ -40,6 +41,7 @@ export function LogListRow(props: {
   columns?: LoggerColumn[]
   mergedMode?: boolean
   sourceLabel?: string
+  searchText?: string
 }): React.ReactElement {
   const prefix = props.entry.prefix ? `${props.entry.prefix} ` : ''
   const labeledMessage = formatSourceLabel(
@@ -63,7 +65,16 @@ export function LogListRow(props: {
       color={props.selected ? 'black' : colorForLevel(props.entry.level)}
       backgroundColor={props.selected ? 'white' : undefined}
     >
-      {props.selected ? '>' : ' '} {text}
+      {props.selected ? '>' : ' '}
+      {splitHighlightedText(text, props.searchText ?? '').segments.map((segment, index) => (
+        <Text
+          key={`${props.entry.id}-${index}`}
+          color={props.selected ? 'black' : segment.highlighted ? 'yellow' : colorForLevel(props.entry.level)}
+          backgroundColor={props.selected ? 'white' : undefined}
+        >
+          {segment.text}
+        </Text>
+      ))}
     </Text>
   )
 }

@@ -31,3 +31,28 @@ Current MVP also includes a simple interactive filter mode:
 - `field:value` for exact field filters
 - `field~value` for substring field filters
 - bare terms perform substring matches against message/raw/source
+
+Keybinding remaps live under `keybindings` in `.logger.jsonc`.
+Current action ids:
+
+- `openHelp`
+- `openFilter`
+- `toggleReverse`
+- `nextTab`
+- `prevTab`
+- `moveUp`
+- `moveDown`
+- `pageUp`
+- `pageDown`
+- `jumpTop`
+- `jumpBottom`
+- `enterDetail`
+- `leaveDetail`
+- `toggleFold`
+- `detailSearch`
+- `repeatSearchNext`
+- `repeatSearchPrev`
+- `copyValue`
+- `copyPath`
+- `toggleAnsi`
+- `cycleMergeSort`

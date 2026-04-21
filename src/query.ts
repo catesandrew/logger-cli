@@ -34,6 +34,22 @@ export function mergeEntriesByTime(entries: LogEntry[], reverse: boolean): LogEn
   return reverse ? sorted.reverse() : sorted
 }
 
-export function createMergedEntries(entriesBySource: LogEntry[][], reverse: boolean): LogEntry[] {
-  return mergeEntriesByTime(entriesBySource.flat(), reverse)
+export function createMergedEntries(
+  entriesBySource: Array<{ sourceId: string; entries: LogEntry[] }>,
+  reverse: boolean,
+  mode: 'time' | 'source',
+): LogEntry[] {
+  if (mode === 'source') {
+    const grouped = entriesBySource.flatMap((group) =>
+      [...group.entries].sort((left, right) => {
+        const leftTime = left.timestampMs ?? Number.MAX_SAFE_INTEGER
+        const rightTime = right.timestampMs ?? Number.MAX_SAFE_INTEGER
+        if (leftTime !== rightTime) return leftTime - rightTime
+        return left.id - right.id
+      }),
+    )
+    return reverse ? [...grouped].reverse() : grouped
+  }
+
+  return mergeEntriesByTime(entriesBySource.flatMap((group) => group.entries), reverse)
 }

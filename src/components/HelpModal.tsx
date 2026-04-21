@@ -15,6 +15,8 @@ export function HelpModal(): React.ReactElement {
       <Text>n / N: next / previous detail match</Text>
       <Text>y: copy selected JSON value preview</Text>
       <Text>p: copy selected JSON path</Text>
+      <Text>a: toggle ANSI preservation in raw text detail mode</Text>
+      <Text>Keybindings can be remapped in .logger.jsonc via keybindings.&lt;action&gt;</Text>
       <Text>Esc: back</Text>
       <Text>Space: toggle fold on JSON node</Text>
       <Text>R: reverse order</Text>

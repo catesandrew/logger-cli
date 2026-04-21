@@ -11,6 +11,8 @@ export function Header(props: {
   detailSearchText?: string
   detailMatchCount?: number
   mergedMode?: boolean
+  mergeSort?: 'time' | 'source'
+  currentDetailMatch?: number
 }): React.ReactElement {
   const active = props.sources[props.activeTabIndex]
   const total = active?.total ?? 0
@@ -29,10 +31,12 @@ export function Header(props: {
         <Text color="yellow">filter: {props.queryText}</Text>
       ) : null}
       {props.detailSearchText ? (
-        <Text color="magenta">detail search: {props.detailSearchText} ({props.detailMatchCount ?? 0} matches)</Text>
+        <Text color="magenta">
+          detail search: {props.detailSearchText} ({props.currentDetailMatch ?? 0}/{props.detailMatchCount ?? 0})
+        </Text>
       ) : null}
       {props.mergedMode ? (
-        <Text color="gray">merge: chronological view across active sources</Text>
+        <Text color="gray">merge: {props.mergeSort === 'source' ? 'grouped by source' : 'chronological by time'}</Text>
       ) : null}
       {props.columns.length > 0 ? (
         <Text color="gray">columns: {props.columns.map((column) => `${column.key}=${column.path}`).join(', ')}</Text>

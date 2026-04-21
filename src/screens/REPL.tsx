@@ -15,9 +15,10 @@ import { useAppState, useAppStateStore } from '../state/AppState.js'
 import { useTerminalSize } from '../hooks/useTerminalSize.js'
 import { QueryEngine, type LoggerSession } from '../QueryEngine.js'
 import { clampIndex, getBottomIndex, shouldFollowSelection } from '../query.js'
-import { findJsonTreeMatch, getJsonTreeCopyValue } from '../lib/query/detailTools.js'
+import { findJsonTreeMatch, findJsonTreeMatchWrapped, findTextMatchWrapped, getJsonTreeCopyValue } from '../lib/query/detailTools.js'
 import { matchesQuery, parseQuery } from '../lib/query/filter.js'
 import { splitHighlightedText } from '../lib/query/highlight.js'
+import { matchesBinding } from '../lib/query/keybindings.js'
 import type { JsonTreeLine, LoggerCliOptions, LogEntry } from '../types.js'
 
 function flattenJson(value: unknown, foldState: Set<string>, path = '$', depth = 0, key?: string): JsonTreeLine[] {
@@ -76,6 +77,7 @@ export function REPL(props: {
   const helpOpen = useAppState((state) => state.helpOpen)
   const reverse = useAppState((state) => state.reverse)
   const follow = useAppState((state) => state.follow)
+  const mergeSort = useAppState((state) => state.mergeSort)
   const replMode = useAppState((state) => state.replMode)
   const queryText = useAppState((state) => state.queryText)
   const detailCursorIndex = useAppState((state) => state.detailCursorIndex)
@@ -86,6 +88,7 @@ export function REPL(props: {
   const [foldState, setFoldState] = useState<Set<string>>(new Set())
   const [detailSearchText, setDetailSearchText] = useState('')
   const [lastDetailSearch, setLastDetailSearch] = useState('')
+  const [preserveAnsi, setPreserveAnsi] = useState(props.options.preserveAnsi)
   const sessionRef = React.useRef<LoggerSession | null>(null)
 
   useEffect(() => {
@@ -116,8 +119,8 @@ export function REPL(props: {
   const columns = snapshot.config?.columns ?? []
   const mergedMode = Boolean(snapshot.merged && activeSource?.spec.id === 'merge-0')
   const allEntries = useMemo(
-    () => (activeSource ? session?.getEntries(activeSource.spec.id, reverse) ?? [] : []),
-    [session, activeSource?.spec.id, reverse, version],
+    () => (activeSource ? session?.getEntries(activeSource.spec.id, reverse, mergeSort) ?? [] : []),
+    [session, activeSource?.spec.id, reverse, mergeSort, version],
   )
   const queryClauses = useMemo(() => parseQuery(queryText), [queryText])
   const activeEntries = useMemo(
@@ -156,6 +159,29 @@ export function REPL(props: {
 
     return selectedEntry ? splitHighlightedText(selectedEntry.raw, detailSearchText).matchCount : 0
   }, [detailSearchText, selectedEntry, treeLines])
+  const currentDetailMatch = useMemo(() => {
+    if (!detailSearchText) {
+      return 0
+    }
+
+    if (selectedEntry?.kind === 'json') {
+      let ordinal = 0
+      for (let index = 0; index < treeLines.length; index += 1) {
+        const line = treeLines[index]
+        if (!line) continue
+        const matchCount = splitHighlightedText(line.valuePreview, detailSearchText).matchCount
+        if (matchCount > 0) {
+          ordinal += 1
+        }
+        if (index === detailCursorIndex && matchCount > 0) {
+          return ordinal
+        }
+      }
+      return 0
+    }
+
+    return detailMatchCount > 0 ? 1 : 0
+  }, [detailSearchText, selectedEntry, treeLines, detailCursorIndex, detailMatchCount])
 
   function moveSelection(delta: number) {
     store.setState((current) => {
@@ -179,9 +205,10 @@ export function REPL(props: {
 
   useInput((input, key) => {
     const extendedKey = key as typeof key & { f1?: boolean; home?: boolean; end?: boolean }
+    const config = snapshot.config
 
     if (helpOpen) {
-      if (key.escape || input === 'q' || extendedKey.f1 || input === '?') {
+      if (key.escape || input === 'q' || matchesBinding('openHelp', input, extendedKey, config)) {
         store.setState({ helpOpen: false })
       }
       return
@@ -201,12 +228,12 @@ export function REPL(props: {
       return
     }
 
-    if (extendedKey.f1 || input === '?') {
+    if (matchesBinding('openHelp', input, extendedKey, config)) {
       store.setState({ helpOpen: true })
       return
     }
 
-    if (input === '/') {
+    if (matchesBinding('openFilter', input, extendedKey, config)) {
       store.setState({ replMode: 'filter' })
       return
     }
@@ -216,7 +243,7 @@ export function REPL(props: {
       return
     }
 
-    if (input === 'R') {
+    if (matchesBinding('toggleReverse', input, extendedKey, config)) {
       store.setState((current) => ({
         ...current,
         reverse: !current.reverse,
@@ -225,7 +252,15 @@ export function REPL(props: {
       return
     }
 
-    if (key.tab) {
+    if (mergedMode && matchesBinding('cycleMergeSort', input, extendedKey, config)) {
+      store.setState((current) => ({
+        ...current,
+        mergeSort: current.mergeSort === 'time' ? 'source' : 'time',
+      }))
+      return
+    }
+
+    if (matchesBinding('nextTab', input, extendedKey, config)) {
       store.setState((current) => ({
         ...current,
         activeTabIndex: snapshot.sources.length === 0 ? 0 : (current.activeTabIndex + 1) % snapshot.sources.length,
@@ -235,7 +270,7 @@ export function REPL(props: {
       return
     }
 
-    if (key.shift && key.tab) {
+    if (matchesBinding('prevTab', input, extendedKey, config)) {
       store.setState((current) => ({
         ...current,
         activeTabIndex: snapshot.sources.length === 0 ? 0 : (current.activeTabIndex - 1 + snapshot.sources.length) % snapshot.sources.length,
@@ -246,22 +281,28 @@ export function REPL(props: {
     }
 
     if (paneFocus === 'detail' && selectedEntry?.kind === 'json') {
-      if (input === '?') {
+      if (matchesBinding('detailSearch', input, extendedKey, config)) {
         store.setState({ replMode: 'detail-search' })
         return
       }
-      if (input === 'n' && lastDetailSearch) {
-        const nextIndex = findJsonTreeMatch(treeLines, lastDetailSearch, detailCursorIndex + 1)
+      if (matchesBinding('repeatSearchNext', input, extendedKey, config) && lastDetailSearch) {
+        const next = findJsonTreeMatchWrapped(treeLines, lastDetailSearch, detailCursorIndex + 1, 'forward')
+        const nextIndex = next.index
         if (nextIndex >= 0) {
           store.setState({ detailCursorIndex: nextIndex })
+          store.setState({ statusLine: next.wrapped ? `Wrapped to next match: ${lastDetailSearch}` : `Next match: ${lastDetailSearch}` })
+        } else {
+          store.setState({ statusLine: `No match for: ${lastDetailSearch}` })
         }
         return
       }
-      if (input === 'N' && lastDetailSearch) {
-        const reversed = [...treeLines].slice(0, detailCursorIndex).reverse()
-        const reverseIndex = findJsonTreeMatch(reversed, lastDetailSearch, 0)
-        if (reverseIndex >= 0) {
-          store.setState({ detailCursorIndex: detailCursorIndex - reverseIndex - 1 })
+      if (matchesBinding('repeatSearchPrev', input, extendedKey, config) && lastDetailSearch) {
+        const previous = findJsonTreeMatchWrapped(treeLines, lastDetailSearch, detailCursorIndex - 1, 'backward')
+        if (previous.index >= 0) {
+          store.setState({ detailCursorIndex: previous.index })
+          store.setState({ statusLine: previous.wrapped ? `Wrapped to previous match: ${lastDetailSearch}` : `Previous match: ${lastDetailSearch}` })
+        } else {
+          store.setState({ statusLine: `No match for: ${lastDetailSearch}` })
         }
         return
       }
@@ -273,15 +314,15 @@ export function REPL(props: {
         store.setState({ paneFocus: 'list' })
         return
       }
-      if (key.upArrow || input === 'k') {
+      if (matchesBinding('moveUp', input, extendedKey, config)) {
         store.setState((current) => ({ ...current, detailCursorIndex: clampIndex(current.detailCursorIndex - 1, treeLines.length) }))
         return
       }
-      if (key.downArrow || input === 'j') {
+      if (matchesBinding('moveDown', input, extendedKey, config)) {
         store.setState((current) => ({ ...current, detailCursorIndex: clampIndex(current.detailCursorIndex + 1, treeLines.length) }))
         return
       }
-      if (input === ' ') {
+      if (matchesBinding('toggleFold', input, extendedKey, config)) {
         const line = treeLines[detailCursorIndex]
         if (line?.collapsible) {
           setFoldState((current) => {
@@ -292,7 +333,7 @@ export function REPL(props: {
           })
         }
       }
-      if (input === 'y') {
+      if (matchesBinding('copyValue', input, extendedKey, config)) {
         const line = treeLines[detailCursorIndex]
         if (line) {
           const text = getJsonTreeCopyValue(line, 'value')
@@ -300,7 +341,7 @@ export function REPL(props: {
           store.setState({ statusLine: `Copied value: ${text}` })
         }
       }
-      if (input === 'p') {
+      if (matchesBinding('copyPath', input, extendedKey, config)) {
         const line = treeLines[detailCursorIndex]
         if (line) {
           const text = getJsonTreeCopyValue(line, 'path')
@@ -312,38 +353,65 @@ export function REPL(props: {
     }
 
     if (paneFocus === 'detail' && selectedEntry?.kind === 'text') {
+      if (matchesBinding('detailSearch', input, extendedKey, config)) {
+        store.setState({ replMode: 'detail-search' })
+        return
+      }
+      if (matchesBinding('repeatSearchNext', input, extendedKey, config) && lastDetailSearch) {
+        const next = findTextMatchWrapped(selectedEntry.raw, lastDetailSearch, 0, 'forward')
+        if (next.index >= 0) {
+          store.setState({ statusLine: next.wrapped ? `Wrapped to next match: ${lastDetailSearch}` : `Next match: ${lastDetailSearch}` })
+        } else {
+          store.setState({ statusLine: `No match for: ${lastDetailSearch}` })
+        }
+        return
+      }
+      if (matchesBinding('repeatSearchPrev', input, extendedKey, config) && lastDetailSearch) {
+        const previous = findTextMatchWrapped(selectedEntry.raw, lastDetailSearch, selectedEntry.raw.length - 1, 'backward')
+        if (previous.index >= 0) {
+          store.setState({ statusLine: previous.wrapped ? `Wrapped to previous match: ${lastDetailSearch}` : `Previous match: ${lastDetailSearch}` })
+        } else {
+          store.setState({ statusLine: `No match for: ${lastDetailSearch}` })
+        }
+        return
+      }
+      if (matchesBinding('toggleAnsi', input, extendedKey, config)) {
+        setPreserveAnsi((current) => !current)
+        store.setState({ statusLine: `ANSI detail ${!preserveAnsi ? 'enabled' : 'disabled'}` })
+        return
+      }
       if (key.escape || key.return) {
         store.setState({ paneFocus: 'list' })
       }
       return
     }
 
-    if (key.return) {
+    if (matchesBinding('enterDetail', input, extendedKey, config)) {
       store.setState({ paneFocus: 'detail', detailCursorIndex: 0 })
       return
     }
 
-    if (key.upArrow || input === 'k') {
+    if (matchesBinding('moveUp', input, extendedKey, config)) {
       moveSelection(-1)
       return
     }
-    if (key.downArrow || input === 'j') {
+    if (matchesBinding('moveDown', input, extendedKey, config)) {
       moveSelection(1)
       return
     }
-    if (key.pageUp) {
+    if (matchesBinding('pageUp', input, extendedKey, config)) {
       moveSelection(-10)
       return
     }
-    if (key.pageDown) {
+    if (matchesBinding('pageDown', input, extendedKey, config)) {
       moveSelection(10)
       return
     }
-    if (extendedKey.home || input === 'g') {
+    if (matchesBinding('jumpTop', input, extendedKey, config)) {
       jumpSelection(0)
       return
     }
-    if (extendedKey.end || input === 'G') {
+    if (matchesBinding('jumpBottom', input, extendedKey, config)) {
       jumpSelection(activeEntries.length - 1)
     }
   })
@@ -367,7 +435,9 @@ export function REPL(props: {
         columns={columns}
         detailSearchText={detailSearchText}
         detailMatchCount={detailMatchCount}
+        currentDetailMatch={currentDetailMatch}
         mergedMode={mergedMode}
+        mergeSort={mergeSort}
       />
       {replMode === 'filter' ? (
         <FilterBar
@@ -395,6 +465,7 @@ export function REPL(props: {
             if (nextIndex >= 0) {
               store.setState({ detailCursorIndex: nextIndex })
             }
+            store.setState({ statusLine: `Detail matches: ${selectedEntry?.kind === 'json' ? treeLines.reduce((sum, line) => sum + splitHighlightedText(line.valuePreview, value).matchCount, 0) : selectedEntry ? splitHighlightedText(selectedEntry.raw, value).matchCount : 0}` })
           }}
           onSubmit={(value) => {
             const nextIndex = findJsonTreeMatch(treeLines, value, detailCursorIndex + 1)
@@ -436,11 +507,17 @@ export function REPL(props: {
               searchText={detailSearchText}
             />
           ) : (
-            <RawTextView text={selectedEntry.raw} searchText={detailSearchText} />
+            <RawTextView text={selectedEntry.raw} searchText={detailSearchText} preserveAnsi={preserveAnsi} />
           )}
         </Box>
       </Box>
-      <Footer follow={follow} paneFocus={paneFocus} replMode={replMode} />
+      <Footer
+        follow={follow}
+        paneFocus={paneFocus}
+        replMode={replMode}
+        mergedMode={mergedMode}
+        mergeSort={mergeSort}
+      />
     </Box>
   )
 }

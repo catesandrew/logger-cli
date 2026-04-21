@@ -18,6 +18,7 @@ export interface LoggerCliOptions {
   maxEntries: number
   preserveAnsi: boolean
   merge: boolean
+  mergeSort: 'time' | 'source'
 }
 
 export interface LoggerColumn {
@@ -27,6 +28,7 @@ export interface LoggerColumn {
 
 export interface LoggerConfig {
   columns: LoggerColumn[]
+  keybindings?: Partial<Record<KeyAction, string[]>>
 }
 
 export interface LogEntry {
@@ -78,3 +80,26 @@ export interface LoggerSnapshot {
 }
 
 export type ReplMode = 'browse' | 'filter' | 'detail-search'
+
+export type KeyAction =
+  | 'openHelp'
+  | 'openFilter'
+  | 'toggleReverse'
+  | 'nextTab'
+  | 'prevTab'
+  | 'moveUp'
+  | 'moveDown'
+  | 'pageUp'
+  | 'pageDown'
+  | 'jumpTop'
+  | 'jumpBottom'
+  | 'enterDetail'
+  | 'leaveDetail'
+  | 'toggleFold'
+  | 'detailSearch'
+  | 'repeatSearchNext'
+  | 'repeatSearchPrev'
+  | 'copyValue'
+  | 'copyPath'
+  | 'toggleAnsi'
+  | 'cycleMergeSort'

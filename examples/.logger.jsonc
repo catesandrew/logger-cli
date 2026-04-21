@@ -3,5 +3,9 @@
   "columns": [
     { "key": "client", "path": "$.client" },
     { "key": "path", "path": "$.request.path" }
-  ]
+  ],
+  "keybindings": {
+    "toggleReverse": ["v"],
+    "cycleMergeSort": ["S"]
+  }
 }

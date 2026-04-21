@@ -4,6 +4,7 @@ import type { LoggerConfig } from '../../types.js'
 
 const DEFAULT_CONFIG: LoggerConfig = {
   columns: [],
+  keybindings: {},
 }
 
 function stripJsonComments(text: string): string {
@@ -16,6 +17,7 @@ async function readConfigFile(filePath: string): Promise<LoggerConfig | null> {
     const parsed = JSON.parse(stripJsonComments(content)) as Partial<LoggerConfig>
     return {
       columns: Array.isArray(parsed.columns) ? parsed.columns : [],
+      keybindings: parsed.keybindings ?? {},
     }
   } catch {
     return null

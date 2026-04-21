@@ -82,12 +82,15 @@ export class LoggerSession {
     }
   }
 
-  getEntries(sourceId: string, reverse: boolean): LogEntry[] {
+  getEntries(sourceId: string, reverse: boolean, mergeSort: 'time' | 'source' = 'time'): LogEntry[] {
     if (sourceId === 'merge-0') {
       const grouped = this.specs
         .filter((spec) => spec.id !== 'merge-0')
-        .map((spec) => this.sourceStates.get(spec.id)?.buffer.toArray(false) ?? [])
-      return createMergedEntries(grouped, reverse)
+        .map((spec) => ({
+          sourceId: spec.id,
+          entries: this.sourceStates.get(spec.id)?.buffer.toArray(false) ?? [],
+        }))
+      return createMergedEntries(grouped, reverse, mergeSort)
     }
     return this.sourceStates.get(sourceId)?.buffer.toArray(reverse) ?? []
   }

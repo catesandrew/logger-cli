@@ -53,11 +53,57 @@ Stream from a command:
 bun run dev -- --cmd "docker logs -f my-container 2>&1"
 ```
 
+Merge multiple live sources:
+
+```bash
+bun run dev -- --merge --merge-sort time app.log --url https://example.com/logs --cmd "docker logs -f app 2>&1"
+```
+
 Use config-driven columns:
 
 ```bash
 cp examples/.logger.jsonc ./.logger.jsonc
 bun run dev -- examples/mixed.log
+```
+
+Keybinding remaps and merge-sort remap example:
+
+```jsonc
+{
+  "columns": [
+    { "key": "client", "path": "$.client" }
+  ],
+  "keybindings": {
+    "toggleReverse": ["v"],
+    "cycleMergeSort": ["S"]
+  }
+}
+```
+
+Supported keybinding action ids:
+
+```text
+openHelp
+openFilter
+toggleReverse
+nextTab
+prevTab
+moveUp
+moveDown
+pageUp
+pageDown
+jumpTop
+jumpBottom
+enterDetail
+leaveDetail
+toggleFold
+detailSearch
+repeatSearchNext
+repeatSearchPrev
+copyValue
+copyPath
+toggleAnsi
+cycleMergeSort
 ```
 
 Built CLI:
@@ -88,6 +134,7 @@ bun run compile:exe
 - `/`: open filter mode
 - `Space`: fold/unfold current JSON node in detail pane
 - `R`: reverse order
+- `M`: cycle merge sort in merged mode
 - `F1` or `?`: help
 - `q`: quit
 

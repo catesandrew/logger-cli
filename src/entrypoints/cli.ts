@@ -9,6 +9,7 @@ export function buildProgram(): Command {
     .option('--cmd <command>', 'Spawn a command and read stdout/stderr as log lines')
     .option('--max <count>', 'Maximum entries to keep in memory', '50000')
     .option('--merge', 'Merge multiple sources into a single chronological view', false)
+    .option('--merge-sort <mode>', 'Sort merged view by time or source', 'time')
     .option('--preserve-ansi', 'Preserve ANSI in raw text detail view', false)
 }
 
@@ -20,6 +21,7 @@ export function parseCli(argv: string[]): LoggerCliOptions {
     cmd?: string
     max: string
     merge?: boolean
+    mergeSort?: 'time' | 'source'
     preserveAnsi?: boolean
   }>()
 
@@ -29,6 +31,7 @@ export function parseCli(argv: string[]): LoggerCliOptions {
     cmd: options.cmd,
     maxEntries: Number.parseInt(options.max, 10) || 50000,
     merge: Boolean(options.merge),
+    mergeSort: options.mergeSort === 'source' ? 'source' : 'time',
     preserveAnsi: Boolean(options.preserveAnsi),
   }
 }
