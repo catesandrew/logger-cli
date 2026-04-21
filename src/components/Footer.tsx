@@ -10,7 +10,7 @@ export function Footer(props: {
   return (
     <Box justifyContent="space-between">
       <Text color="gray">
-        / filter · ? detail search · y copy value · p copy path · j/k move · Enter detail · Esc back · Space fold · Tab tabs · R reverse · F1 help · q quit
+        / filter · ? detail search · n/N repeat search · y copy value · p copy path · j/k move · Enter detail · Esc back · Space fold · Tab tabs · R reverse · F1 help · q quit
       </Text>
       <Text color="yellow">
         mode:{props.replMode} · focus:{props.paneFocus} · follow:{props.follow ? 'on' : 'off'}

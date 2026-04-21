@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import clipboard from 'clipboardy'
 import { Box, Text, useApp, useInput } from 'ink'
 import { Header } from '../components/Header.js'
 import { Footer } from '../components/Footer.js'
@@ -83,6 +84,7 @@ export function REPL(props: {
   const [version, setVersion] = useState(0)
   const [foldState, setFoldState] = useState<Set<string>>(new Set())
   const [detailSearchText, setDetailSearchText] = useState('')
+  const [lastDetailSearch, setLastDetailSearch] = useState('')
   const sessionRef = React.useRef<LoggerSession | null>(null)
 
   useEffect(() => {
@@ -235,6 +237,21 @@ export function REPL(props: {
         store.setState({ replMode: 'detail-search' })
         return
       }
+      if (input === 'n' && lastDetailSearch) {
+        const nextIndex = findJsonTreeMatch(treeLines, lastDetailSearch, detailCursorIndex + 1)
+        if (nextIndex >= 0) {
+          store.setState({ detailCursorIndex: nextIndex })
+        }
+        return
+      }
+      if (input === 'N' && lastDetailSearch) {
+        const reversed = [...treeLines].slice(0, detailCursorIndex).reverse()
+        const reverseIndex = findJsonTreeMatch(reversed, lastDetailSearch, 0)
+        if (reverseIndex >= 0) {
+          store.setState({ detailCursorIndex: detailCursorIndex - reverseIndex - 1 })
+        }
+        return
+      }
       if (key.escape) {
         store.setState({ paneFocus: 'list' })
         return
@@ -266,14 +283,16 @@ export function REPL(props: {
         const line = treeLines[detailCursorIndex]
         if (line) {
           const text = getJsonTreeCopyValue(line, 'value')
-          void Bun.write(Bun.stdout, `\n[copied value] ${text}\n`)
+          void clipboard.write(text)
+          store.setState({ statusLine: `Copied value: ${text}` })
         }
       }
       if (input === 'p') {
         const line = treeLines[detailCursorIndex]
         if (line) {
           const text = getJsonTreeCopyValue(line, 'path')
-          void Bun.write(Bun.stdout, `\n[copied path] ${text}\n`)
+          void clipboard.write(text)
+          store.setState({ statusLine: `Copied path: ${text}` })
         }
       }
       return
@@ -355,6 +374,7 @@ export function REPL(props: {
           label="?"
           onChange={(value) => {
             setDetailSearchText(value)
+            setLastDetailSearch(value)
             const nextIndex = findJsonTreeMatch(treeLines, value, 0)
             if (nextIndex >= 0) {
               store.setState({ detailCursorIndex: nextIndex })

@@ -12,6 +12,7 @@ export function HelpModal(): React.ReactElement {
       <Text>Enter: toggle detail focus</Text>
       <Text>/ : enter filter mode</Text>
       <Text>? in detail: search detail pane</Text>
+      <Text>n / N: next / previous detail match</Text>
       <Text>y: copy selected JSON value preview</Text>
       <Text>p: copy selected JSON path</Text>
       <Text>Esc: back</Text>
