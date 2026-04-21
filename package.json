@@ -15,6 +15,7 @@
     "test": "bun test tests/*.test.ts",
     "test:e2e": "bun run build && bun test tests/e2e/*.test.ts",
     "repo:dump": "find . \\( -path './node_modules' -o -path './dist' \\) -prune -o -type f -print | sort | while read f; do printf '\\n===== %s =====\\n' \"$f\"; cat \"$f\"; done > REPO_DUMP.txt",
+    "build:exe": "bun build --compile ./src/main.tsx --outfile ./bin/logger",
     "compile:exe": "bun build --compile ./src/main.tsx --outfile ./bin/logger"
   },
   "dependencies": {
