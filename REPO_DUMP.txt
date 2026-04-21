@@ -1,0 +1,2035 @@
+
+===== .gitignore =====
+node_modules/
+dist/
+bin/logger
+.DS_Store
+.omx/
+
+===== README.md =====
+# logger
+
+`logger` is a Bun-first TUI for browsing mixed server log streams.
+
+It is optimized for:
+
+- JSONL most of the time
+- plain text sometimes
+- files, stdin, HTTP streams, or spawned commands
+- a compact virtualized list on the left
+- a JSON tree or raw text details view on the right
+
+## Usage
+
+```bash
+bun install
+bun run dev -- examples/mixed.log
+```
+
+Open multiple files as tabs:
+
+```bash
+bun run dev -- access.log app.log
+```
+
+Read from stdin:
+
+```bash
+cat examples/mixed.log | bun run dev --
+```
+
+Stream from a URL:
+
+```bash
+bun run dev -- --url https://example.com/logs
+```
+
+Stream from a command:
+
+```bash
+bun run dev -- --cmd "docker logs -f my-container 2>&1"
+```
+
+## Keybindings
+
+- `Up` / `Down` or `j` / `k`: move selection
+- `PgUp` / `PgDn`: page
+- `Home` / `End`: jump beginning/end
+- `g` / `G`: jump top/bottom
+- `Tab`: next source tab
+- `Shift+Tab`: previous source tab
+- `Enter`: toggle detail focus
+- `Esc`: leave detail focus / close help
+- `Space`: fold/unfold current JSON node in detail pane
+- `R`: reverse order
+- `F1` or `?`: help
+- `q`: quit
+
+## Scripts
+
+```bash
+bun run typecheck
+bun test
+bun run build
+bun run compile:exe
+```
+
+## File Layout
+
+- `src/main.tsx`: launch spine
+- `src/replLauncher.tsx`: shell handoff
+- `src/components/App.tsx`: providers
+- `src/screens/REPL.tsx`: TUI kernel
+- `src/QueryEngine.ts`: source/session facade
+- `src/query.ts`: view transform helpers
+- `src/lib/ingest`: sources and ring buffer
+- `src/lib/parse`: mixed JSON/text parsing
+
+
+===== bin/logger =====
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+exec bun run "${PROJECT_ROOT}/src/main.tsx" "$@"
+
+===== bun.lock =====
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "logger",
+      "dependencies": {
+        "commander": "^13.1.0",
+        "ink": "^5.2.1",
+        "ink-text-input": "^6.0.0",
+        "react": "^18.3.1",
+        "react-devtools-core": "file:./vendor/react-devtools-core",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.3.9",
+        "@types/node": "^24.0.0",
+        "@types/react": "^18.3.18",
+        "typescript": "^5.8.3",
+      },
+    },
+  },
+  "packages": {
+    "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@0.1.3", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^4.0.0" } }, "sha512-3yWxPTq3UQ/FY9p1ErPxIyfT64elWaMvM9lIHnaqpyft63tkxodF5aUElYHrdisWve5cETkh1+KBw1yJuW0aRw=="],
+
+    "@types/bun": ["@types/bun@1.3.12", "", { "dependencies": { "bun-types": "1.3.12" } }, "sha512-DBv81elK+/VSwXHDlnH3Qduw+KxkTIWi7TXkAeh24zpi5l0B2kUg9Ga3tb4nJaPcOFswflgi/yAvMVBPrxMB+A=="],
+
+    "@types/node": ["@types/node@24.12.2", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g=="],
+
+    "@types/prop-types": ["@types/prop-types@15.7.15", "", {}, "sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw=="],
+
+    "@types/react": ["@types/react@18.3.28", "", { "dependencies": { "@types/prop-types": "*", "csstype": "^3.2.2" } }, "sha512-z9VXpC7MWrhfWipitjNdgCauoMLRdIILQsAEV+ZesIzBq/oUlxk0m3ApZuMFCXdnS4U7KrI+l3WRUEGQ8K1QKw=="],
+
+    "ansi-escapes": ["ansi-escapes@7.3.0", "", { "dependencies": { "environment": "^1.0.0" } }, "sha512-BvU8nYgGQBxcmMuEeUEmNTvrMVjJNSH7RgW24vXexN4Ven6qCvy4TntnvlnwnMLTVlcRQQdbRY8NKnaIoeWDNg=="],
+
+    "ansi-regex": ["ansi-regex@6.2.2", "", {}, "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg=="],
+
+    "ansi-styles": ["ansi-styles@6.2.3", "", {}, "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg=="],
+
+    "auto-bind": ["auto-bind@5.0.1", "", {}, "sha512-ooviqdwwgfIfNmDwo94wlshcdzfO64XV0Cg6oDsDYBJfITDz1EngD2z7DkbvCWn+XIMsIqW27sEVF6qcpJrRcg=="],
+
+    "bun-types": ["bun-types@1.3.12", "", { "dependencies": { "@types/node": "*" } }, "sha512-HqOLj5PoFajAQciOMRiIZGNoKxDJSr6qigAttOX40vJuSp6DN/CxWp9s3C1Xwm4oH7ybueITwiaOcWXoYVoRkA=="],
+
+    "chalk": ["chalk@5.6.2", "", {}, "sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA=="],
+
+    "cli-boxes": ["cli-boxes@3.0.0", "", {}, "sha512-/lzGpEWL/8PfI0BmBOPRwp0c/wFNX1RdUML3jK/RcSBA9T8mZDdQpqYBKtCFTOfQbwPqWEOpjqW+Fnayc0969g=="],
+
+    "cli-cursor": ["cli-cursor@4.0.0", "", { "dependencies": { "restore-cursor": "^4.0.0" } }, "sha512-VGtlMu3x/4DOtIUwEkRezxUZ2lBacNJCHash0N0WeZDBS+7Ux1dm3XWAgWYxLJFMMdOeXMHXorshEFhbMSGelg=="],
+
+    "cli-truncate": ["cli-truncate@4.0.0", "", { "dependencies": { "slice-ansi": "^5.0.0", "string-width": "^7.0.0" } }, "sha512-nPdaFdQ0h/GEigbPClz11D0v/ZJEwxmeVZGeMo3Z5StPtUTkA9o1lD6QwoirYiSDzbcwn2XcjwmCp68W1IS4TA=="],
+
+    "code-excerpt": ["code-excerpt@4.0.0", "", { "dependencies": { "convert-to-spaces": "^2.0.1" } }, "sha512-xxodCmBen3iy2i0WtAK8FlFNrRzjUqjRsMfho58xT/wvZU1YTM3fCnRjcy1gJPMepaRlgm/0e6w8SpWHpn3/cA=="],
+
+    "commander": ["commander@13.1.0", "", {}, "sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw=="],
+
+    "convert-to-spaces": ["convert-to-spaces@2.0.1", "", {}, "sha512-rcQ1bsQO9799wq24uE5AM2tAILy4gXGIK/njFWcVQkGNZ96edlpY+A7bjwvzjYvLDyzmG1MmMLZhpcsb+klNMQ=="],
+
+    "csstype": ["csstype@3.2.3", "", {}, "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="],
+
+    "emoji-regex": ["emoji-regex@10.6.0", "", {}, "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A=="],
+
+    "environment": ["environment@1.1.0", "", {}, "sha512-xUtoPkMggbz0MPyPiIWr1Kp4aeWJjDZ6SMvURhimjdZgsRuDplF5/s9hcgGhyXMhs+6vpnuoiZ2kFiu3FMnS8Q=="],
+
+    "es-toolkit": ["es-toolkit@1.45.1", "", {}, "sha512-/jhoOj/Fx+A+IIyDNOvO3TItGmlMKhtX8ISAHKE90c4b/k1tqaqEZ+uUqfpU8DMnW5cgNJv606zS55jGvza0Xw=="],
+
+    "escape-string-regexp": ["escape-string-regexp@2.0.0", "", {}, "sha512-UpzcLCXolUWcNu5HtVMHYdXJjArjsF9C0aNnquZYY4uW/Vu0miy5YoWvbV345HauVvcAUnpRuhMMcqTcGOY2+w=="],
+
+    "get-east-asian-width": ["get-east-asian-width@1.5.0", "", {}, "sha512-CQ+bEO+Tva/qlmw24dCejulK5pMzVnUOFOijVogd3KQs07HnRIgp8TGipvCCRT06xeYEbpbgwaCxglFyiuIcmA=="],
+
+    "indent-string": ["indent-string@5.0.0", "", {}, "sha512-m6FAo/spmsW2Ab2fU35JTYwtOKa2yAwXSwgjSv1TJzh4Mh7mC3lzAOVLBprb72XsTrgkEIsl7YrFNAiDiRhIGg=="],
+
+    "ink": ["ink@5.2.1", "", { "dependencies": { "@alcalzone/ansi-tokenize": "^0.1.3", "ansi-escapes": "^7.0.0", "ansi-styles": "^6.2.1", "auto-bind": "^5.0.1", "chalk": "^5.3.0", "cli-boxes": "^3.0.0", "cli-cursor": "^4.0.0", "cli-truncate": "^4.0.0", "code-excerpt": "^4.0.0", "es-toolkit": "^1.22.0", "indent-string": "^5.0.0", "is-in-ci": "^1.0.0", "patch-console": "^2.0.0", "react-reconciler": "^0.29.0", "scheduler": "^0.23.0", "signal-exit": "^3.0.7", "slice-ansi": "^7.1.0", "stack-utils": "^2.0.6", "string-width": "^7.2.0", "type-fest": "^4.27.0", "widest-line": "^5.0.0", "wrap-ansi": "^9.0.0", "ws": "^8.18.0", "yoga-layout": "~3.2.1" }, "peerDependencies": { "@types/react": ">=18.0.0", "react": ">=18.0.0", "react-devtools-core": "^4.19.1" }, "optionalPeers": ["@types/react", "react-devtools-core"] }, "sha512-BqcUyWrG9zq5HIwW6JcfFHsIYebJkWWb4fczNah1goUO0vv5vneIlfwuS85twyJ5hYR/y18FlAYUxrO9ChIWVg=="],
+
+    "ink-text-input": ["ink-text-input@6.0.0", "", { "dependencies": { "chalk": "^5.3.0", "type-fest": "^4.18.2" }, "peerDependencies": { "ink": ">=5", "react": ">=18" } }, "sha512-Fw64n7Yha5deb1rHY137zHTAbSTNelUKuB5Kkk2HACXEtwIHBCf9OH2tP/LQ9fRYTl1F0dZgbW0zPnZk6FA9Lw=="],
+
+    "is-fullwidth-code-point": ["is-fullwidth-code-point@4.0.0", "", {}, "sha512-O4L094N2/dZ7xqVdrXhh9r1KODPJpFms8B5sGdJLPy664AgvXsreZUyCQQNItZRDlYug4xStLjNp/sz3HvBowQ=="],
+
+    "is-in-ci": ["is-in-ci@1.0.0", "", { "bin": { "is-in-ci": "cli.js" } }, "sha512-eUuAjybVTHMYWm/U+vBO1sY/JOCgoPCXRxzdju0K+K0BiGW0SChEL1MLC0PoCIR1OlPo5YAp8HuQoUlsWEICwg=="],
+
+    "js-tokens": ["js-tokens@4.0.0", "", {}, "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ=="],
+
+    "loose-envify": ["loose-envify@1.4.0", "", { "dependencies": { "js-tokens": "^3.0.0 || ^4.0.0" }, "bin": { "loose-envify": "cli.js" } }, "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q=="],
+
+    "mimic-fn": ["mimic-fn@2.1.0", "", {}, "sha512-OqbOk5oEQeAZ8WXWydlu9HJjz9WVdEIvamMCcXmuqUYjTknH/sqsWvhQ3vgwKFRR1HpjvNBKQ37nbJgYzGqGcg=="],
+
+    "onetime": ["onetime@5.1.2", "", { "dependencies": { "mimic-fn": "^2.1.0" } }, "sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg=="],
+
+    "patch-console": ["patch-console@2.0.0", "", {}, "sha512-0YNdUceMdaQwoKce1gatDScmMo5pu/tfABfnzEqeG0gtTmd7mh/WcwgUjtAeOU7N8nFFlbQBnFK2gXW5fGvmMA=="],
+
+    "react": ["react@18.3.1", "", { "dependencies": { "loose-envify": "^1.1.0" } }, "sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ=="],
+
+    "react-devtools-core": ["react-devtools-core@file:vendor/react-devtools-core", {}],
+
+    "react-reconciler": ["react-reconciler@0.29.2", "", { "dependencies": { "loose-envify": "^1.1.0", "scheduler": "^0.23.2" }, "peerDependencies": { "react": "^18.3.1" } }, "sha512-zZQqIiYgDCTP/f1N/mAR10nJGrPD2ZR+jDSEsKWJHYC7Cm2wodlwbR3upZRdC3cjIjSlTLNVyO7Iu0Yy7t2AYg=="],
+
+    "restore-cursor": ["restore-cursor@4.0.0", "", { "dependencies": { "onetime": "^5.1.0", "signal-exit": "^3.0.2" } }, "sha512-I9fPXU9geO9bHOt9pHHOhOkYerIMsmVaWB0rA2AI9ERh/+x/i7MV5HKBNrg+ljO5eoPVgCcnFuRjJ9uH6I/3eg=="],
+
+    "scheduler": ["scheduler@0.23.2", "", { "dependencies": { "loose-envify": "^1.1.0" } }, "sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ=="],
+
+    "signal-exit": ["signal-exit@3.0.7", "", {}, "sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ=="],
+
+    "slice-ansi": ["slice-ansi@7.1.2", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^5.0.0" } }, "sha512-iOBWFgUX7caIZiuutICxVgX1SdxwAVFFKwt1EvMYYec/NWO5meOJ6K5uQxhrYBdQJne4KxiqZc+KptFOWFSI9w=="],
+
+    "stack-utils": ["stack-utils@2.0.6", "", { "dependencies": { "escape-string-regexp": "^2.0.0" } }, "sha512-XlkWvfIm6RmsWtNJx+uqtKLS8eqFbxUg0ZzLXqY0caEy9l7hruX8IpiDnjsLavoBgqCCR71TqWO8MaXYheJ3RQ=="],
+
+    "string-width": ["string-width@7.2.0", "", { "dependencies": { "emoji-regex": "^10.3.0", "get-east-asian-width": "^1.0.0", "strip-ansi": "^7.1.0" } }, "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ=="],
+
+    "strip-ansi": ["strip-ansi@7.2.0", "", { "dependencies": { "ansi-regex": "^6.2.2" } }, "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w=="],
+
+    "type-fest": ["type-fest@4.41.0", "", {}, "sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA=="],
+
+    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "undici-types": ["undici-types@7.16.0", "", {}, "sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw=="],
+
+    "widest-line": ["widest-line@5.0.0", "", { "dependencies": { "string-width": "^7.0.0" } }, "sha512-c9bZp7b5YtRj2wOe6dlj32MK+Bx/M/d+9VB2SHM1OtsUHR0aV0tdP6DWh/iMt0kWi1t5g1Iudu6hQRNd1A4PVA=="],
+
+    "wrap-ansi": ["wrap-ansi@9.0.2", "", { "dependencies": { "ansi-styles": "^6.2.1", "string-width": "^7.0.0", "strip-ansi": "^7.1.0" } }, "sha512-42AtmgqjV+X1VpdOfyTGOYRi0/zsoLqtXQckTmqTeybT+BDIbM/Guxo7x3pE2vtpr1ok6xRqM9OpBe+Jyoqyww=="],
+
+    "ws": ["ws@8.20.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA=="],
+
+    "yoga-layout": ["yoga-layout@3.2.1", "", {}, "sha512-0LPOt3AxKqMdFBZA3HBAt/t/8vIKq7VaQYbuA8WxCgung+p9TVyKRYdpvCb80HcdTN2NkbIKbhNwKUfm3tQywQ=="],
+
+    "cli-truncate/slice-ansi": ["slice-ansi@5.0.0", "", { "dependencies": { "ansi-styles": "^6.0.0", "is-fullwidth-code-point": "^4.0.0" } }, "sha512-FC+lgizVPfie0kkhqUScwRu1O/lF6NOgJmlCgK+/LYxDCTk8sGelYaHDhFcDN+Sn3Cv+3VSa4Byeo+IMCzpMgQ=="],
+
+    "slice-ansi/is-fullwidth-code-point": ["is-fullwidth-code-point@5.1.0", "", { "dependencies": { "get-east-asian-width": "^1.3.1" } }, "sha512-5XHYaSyiqADb4RnZ1Bdad6cPp8Toise4TzEjcOYDHZkTCbKgiUl7WTUCpNWHuxmDt91wnsZBc9xinNzopv3JMQ=="],
+  }
+}
+
+===== docs/onboarding.md =====
+# Onboarding
+
+`logger` is built on the reusable shell architecture from `node-console`.
+
+Preserve these seams:
+
+1. `src/main.tsx`
+2. `src/replLauncher.tsx`
+3. `src/components/App.tsx`
+4. `src/screens/REPL.tsx`
+5. `src/QueryEngine.ts`
+6. `src/query.ts`
+
+Product-specific logic should mostly live in:
+
+- `src/lib/ingest`
+- `src/lib/parse`
+- `src/components`
+
+The TUI should stay responsive under continuous input by:
+
+- batching ingestion
+- using ring buffers
+- virtualizing the left list
+- keeping follow mode separate from manual navigation
+
+===== examples/mixed.log =====
+{"time":"2026-04-21T19:00:00Z","level":"info","message":"server started","port":8080}
+api-1 | {"timestamp":1713726061000,"severity":"warn","msg":"rate limit nearing threshold","client":"203.0.113.10"}
+plain text startup line with no json
+{"ts":"2026-04-21T19:01:02Z","level":"error","message":"request failed","request":{"id":"req_123","path":"/health"}}
+worker-a | {"time":"2026-04-21T19:01:05Z","level":"debug","msg":"cache miss","cache":{"key":"user:42","region":"us-east"}}
+
+===== package.json =====
+{
+  "name": "logger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.1",
+  "bin": {
+    "logger": "./bin/logger"
+  },
+  "scripts": {
+    "dev": "bun run src/main.tsx",
+    "build": "bunx tsc -p tsconfig.json",
+    "start": "bun run dist/main.js",
+    "typecheck": "bunx tsc -p tsconfig.json --noEmit",
+    "test": "bun test tests/*.test.ts",
+    "test:e2e": "bun run build && bun test tests/e2e/*.test.ts",
+    "repo:dump": "find . \\( -path './node_modules' -o -path './dist' \\) -prune -o -type f -print | sort | while read f; do printf '\\n===== %s =====\\n' \"$f\"; cat \"$f\"; done > REPO_DUMP.txt",
+    "compile:exe": "bun build --compile ./src/main.tsx --outfile ./bin/logger"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "ink": "^5.2.1",
+    "ink-text-input": "^6.0.0",
+    "react": "^18.3.1",
+    "react-devtools-core": "file:./vendor/react-devtools-core"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.9",
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.18",
+    "typescript": "^5.8.3"
+  }
+}
+
+===== src/QueryEngine.ts =====
+import type { LoggerCliOptions, LogEntry, LoggerSnapshot, SourceSnapshot, SourceSpec } from './types.js'
+import { createSourceSpecs } from './lib/ingest/createSources.js'
+import { RingBuffer } from './lib/ingest/ringBuffer.js'
+import { createFileSource } from './lib/ingest/fileSource.js'
+import { createStdinSource } from './lib/ingest/stdinSource.js'
+import { createUrlSource } from './lib/ingest/urlSource.js'
+import { createCommandSource } from './lib/ingest/commandSource.js'
+import { parseLine } from './lib/parse/parseLine.js'
+import type { SourceCallbacks, SourceSubscription } from './lib/ingest/sourceTypes.js'
+
+type Listener = () => void
+
+interface SourceState {
+  spec: SourceSpec
+  buffer: RingBuffer<LogEntry>
+  total: number
+  jsonCount: number
+  textCount: number
+}
+
+export class LoggerSession {
+  private readonly listeners = new Set<Listener>()
+  private readonly sourceStates = new Map<string, SourceState>()
+  private readonly subscriptions: SourceSubscription[] = []
+  private readonly pending = new Map<string, LogEntry[]>()
+  private flushTimer: ReturnType<typeof setTimeout> | null = null
+  private nextEntryId = 1
+  private version = 0
+
+  constructor(private readonly options: LoggerCliOptions, readonly specs: SourceSpec[]) {
+    for (const spec of specs) {
+      this.sourceStates.set(spec.id, {
+        spec,
+        buffer: new RingBuffer<LogEntry>(options.maxEntries),
+        total: 0,
+        jsonCount: 0,
+        textCount: 0,
+      })
+    }
+  }
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  getSnapshot(): LoggerSnapshot {
+    const sources: SourceSnapshot[] = this.specs.map((spec) => {
+      const state = this.sourceStates.get(spec.id)
+      return {
+        spec,
+        total: state?.total ?? 0,
+        jsonCount: state?.jsonCount ?? 0,
+        textCount: state?.textCount ?? 0,
+      }
+    })
+    return {
+      version: this.version,
+      sources,
+    }
+  }
+
+  getEntries(sourceId: string, reverse: boolean): LogEntry[] {
+    return this.sourceStates.get(sourceId)?.buffer.toArray(reverse) ?? []
+  }
+
+  async start(): Promise<void> {
+    for (const spec of this.specs) {
+      const callbacks: SourceCallbacks = {
+        onLine: (line) => this.enqueueLine(spec, line),
+        onError: () => this.flush(),
+        onEnd: () => this.flush(),
+      }
+
+      const subscription =
+        spec.type === 'file'
+          ? createFileSource(spec, callbacks)
+          : spec.type === 'stdin'
+            ? createStdinSource(spec, callbacks)
+            : spec.type === 'url'
+              ? createUrlSource(spec, callbacks)
+              : createCommandSource(spec, callbacks)
+
+      this.subscriptions.push(subscription)
+    }
+  }
+
+  stop(): void {
+    for (const subscription of this.subscriptions) {
+      subscription.stop()
+    }
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer)
+      this.flushTimer = null
+    }
+  }
+
+  private enqueueLine(spec: SourceSpec, raw: string): void {
+    const parsed = parseLine(raw)
+    const entry: LogEntry = {
+      id: this.nextEntryId++,
+      sourceId: spec.id,
+      raw,
+      prefix: parsed.prefix,
+      kind: parsed.kind,
+      parsed: parsed.parsed,
+      time: parsed.time,
+      timestampMs: parsed.timestampMs,
+      level: parsed.level,
+      levelRaw: parsed.levelRaw,
+      message: parsed.message,
+    }
+
+    const pending = this.pending.get(spec.id) ?? []
+    pending.push(entry)
+    this.pending.set(spec.id, pending)
+    this.scheduleFlush()
+  }
+
+  private scheduleFlush(): void {
+    if (this.flushTimer) {
+      return
+    }
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null
+      this.flush()
+    }, 50)
+  }
+
+  private flush(): void {
+    if (this.pending.size === 0) {
+      return
+    }
+
+    for (const [sourceId, entries] of this.pending) {
+      const state = this.sourceStates.get(sourceId)
+      if (!state) {
+        continue
+      }
+
+      for (const entry of entries) {
+        state.buffer.push(entry)
+        state.total += 1
+        if (entry.kind === 'json') {
+          state.jsonCount += 1
+        } else {
+          state.textCount += 1
+        }
+      }
+    }
+
+    this.pending.clear()
+    this.version += 1
+    for (const listener of this.listeners) {
+      listener()
+    }
+  }
+}
+
+export class QueryEngine {
+  async start(options: LoggerCliOptions): Promise<LoggerSession> {
+    const specs = createSourceSpecs(options, process.stdin.isTTY ?? false)
+    const session = new LoggerSession(options, specs)
+    await session.start()
+    return session
+  }
+}
+
+===== src/components/App.tsx =====
+import React from 'react'
+import { Box } from 'ink'
+import { AppStateProvider } from '../state/AppState.js'
+
+export function App(props: {
+  initialCwd: string
+  startupNotes: string[]
+  theme: 'amber' | 'cyan'
+  children: React.ReactNode
+}): React.ReactElement {
+  return (
+    <AppStateProvider cwd={props.initialCwd}>
+      <Box flexDirection="column">{props.children}</Box>
+    </AppStateProvider>
+  )
+}
+
+===== src/components/Footer.tsx =====
+import React from 'react'
+import { Box, Text } from 'ink'
+import type { PaneFocus } from '../types.js'
+
+export function Footer(props: {
+  follow: boolean
+  paneFocus: PaneFocus
+}): React.ReactElement {
+  return (
+    <Box justifyContent="space-between">
+      <Text color="gray">
+        j/k or arrows move · Enter detail · Esc back · Space fold · Tab tabs · R reverse · F1 help · q quit
+      </Text>
+      <Text color="yellow">
+        focus:{props.paneFocus} · follow:{props.follow ? 'on' : 'off'}
+      </Text>
+    </Box>
+  )
+}
+
+===== src/components/Header.tsx =====
+import React from 'react'
+import { Box, Text } from 'ink'
+import type { SourceSnapshot } from '../types.js'
+
+export function Header(props: {
+  sources: SourceSnapshot[]
+  activeTabIndex: number
+}): React.ReactElement {
+  const active = props.sources[props.activeTabIndex]
+  const total = active?.total ?? 0
+  const jsonCount = active?.jsonCount ?? 0
+  const textCount = active?.textCount ?? 0
+
+  return (
+    <Box flexDirection="column">
+      <Box justifyContent="space-between">
+        <Text color="cyan">logger</Text>
+        <Text color="gray">
+          source:{active?.spec.label ?? 'none'} total:{total} json:{jsonCount} text:{textCount}
+        </Text>
+      </Box>
+      <Box gap={1}>
+        {props.sources.map((source, index) => (
+          <Text
+            key={source.spec.id}
+            color={index === props.activeTabIndex ? 'black' : 'gray'}
+            backgroundColor={index === props.activeTabIndex ? 'cyan' : undefined}
+          >
+            {source.spec.label}
+          </Text>
+        ))}
+      </Box>
+    </Box>
+  )
+}
+
+===== src/components/HelpModal.tsx =====
+import React from 'react'
+import { Box, Text } from 'ink'
+
+export function HelpModal(): React.ReactElement {
+  return (
+    <Box flexDirection="column" borderStyle="round" padding={1}>
+      <Text color="cyan">logger help</Text>
+      <Text>Up/Down or j/k: move selection</Text>
+      <Text>PgUp/PgDn: page</Text>
+      <Text>Home/End or g/G: jump</Text>
+      <Text>Tab / Shift+Tab: switch source tabs</Text>
+      <Text>Enter: toggle detail focus</Text>
+      <Text>Esc: back</Text>
+      <Text>Space: toggle fold on JSON node</Text>
+      <Text>R: reverse order</Text>
+      <Text>F1 or ?: help</Text>
+      <Text>q: quit</Text>
+    </Box>
+  )
+}
+
+===== src/components/JsonTree.tsx =====
+import React, { useMemo } from 'react'
+import { Box, Text } from 'ink'
+import type { JsonTreeLine } from '../types.js'
+
+function formatScalar(value: unknown): string {
+  if (typeof value === 'string') return JSON.stringify(value)
+  if (value === null) return 'null'
+  if (typeof value === 'object') return Array.isArray(value) ? '[...]' : '{...}'
+  return String(value)
+}
+
+function buildTreeLines(
+  value: unknown,
+  foldState: Set<string>,
+  path = '$',
+  depth = 0,
+  key?: string,
+): JsonTreeLine[] {
+  const id = path
+  const isObject = value !== null && typeof value === 'object'
+  const collapsible = isObject
+  const collapsed = collapsible && foldState.has(id)
+  const preview =
+    key !== undefined
+      ? `${key}: ${formatScalar(value)}`
+      : formatScalar(value)
+
+  const lines: JsonTreeLine[] = [
+    {
+      id,
+      depth,
+      key,
+      valuePreview: preview,
+      collapsible,
+      collapsed,
+    },
+  ]
+
+  if (!isObject || collapsed) {
+    return lines
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((child, index) => {
+      lines.push(...buildTreeLines(child, foldState, `${path}[${index}]`, depth + 1, `[${index}]`))
+    })
+    return lines
+  }
+
+  for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+    lines.push(...buildTreeLines(childValue, foldState, `${path}.${childKey}`, depth + 1, childKey))
+  }
+
+  return lines
+}
+
+export function JsonTree(props: {
+  value: unknown
+  foldState: Set<string>
+  selectedIndex: number
+}): React.ReactElement {
+  const lines = useMemo(() => buildTreeLines(props.value, props.foldState), [props.value, props.foldState])
+
+  return (
+    <Box flexDirection="column">
+      {lines.map((line, index) => (
+        <Text
+          key={line.id}
+          color={index === props.selectedIndex ? 'black' : 'white'}
+          backgroundColor={index === props.selectedIndex ? 'cyan' : undefined}
+        >
+          {' '.repeat(line.depth * 2)}
+          {line.collapsible ? (line.collapsed ? '▶ ' : '▼ ') : '  '}
+          {line.valuePreview}
+        </Text>
+      ))}
+    </Box>
+  )
+}
+
+===== src/components/LogListRow.tsx =====
+import React from 'react'
+import { Text } from 'ink'
+import type { LogEntry } from '../types.js'
+
+function colorForLevel(level: LogEntry['level']): string {
+  switch (level) {
+    case 'trace':
+      return 'gray'
+    case 'debug':
+      return 'blue'
+    case 'info':
+      return 'green'
+    case 'warn':
+      return 'yellow'
+    case 'error':
+    case 'fatal':
+      return 'red'
+    default:
+      return 'white'
+  }
+}
+
+function compactTime(entry: LogEntry): string {
+  if (!entry.time) {
+    return '--:--:--'
+  }
+  const date = new Date(entry.time)
+  if (Number.isNaN(date.getTime())) {
+    return entry.time.slice(0, 8)
+  }
+  return date.toISOString().slice(11, 19)
+}
+
+export function LogListRow(props: {
+  entry: LogEntry
+  selected: boolean
+  width: number
+}): React.ReactElement {
+  const prefix = props.entry.prefix ? `${props.entry.prefix} ` : ''
+  const rawText = `${compactTime(props.entry)} ${props.entry.level.toUpperCase().padEnd(5)} ${prefix}${props.entry.message}`
+  const text = rawText.length > props.width ? `${rawText.slice(0, Math.max(0, props.width - 3))}...` : rawText
+
+  return (
+    <Text
+      color={props.selected ? 'black' : colorForLevel(props.entry.level)}
+      backgroundColor={props.selected ? 'white' : undefined}
+    >
+      {props.selected ? '>' : ' '} {text}
+    </Text>
+  )
+}
+
+===== src/components/RawTextView.tsx =====
+import React from 'react'
+import { Box, Text } from 'ink'
+
+export function RawTextView(props: { text: string }): React.ReactElement {
+  return (
+    <Box flexDirection="column">
+      {props.text.split('\n').map((line, index) => (
+        <Text key={`${index}-${line}`}>{line}</Text>
+      ))}
+    </Box>
+  )
+}
+
+===== src/components/StatusLine.tsx =====
+import React from 'react'
+import { Box, Text } from 'ink'
+import { useAppState } from '../state/AppState.js'
+
+export function StatusLine(): React.ReactElement {
+  const cwd = useAppState((state) => state.cwd)
+  const status = useAppState((state) => state.statusLine)
+  const follow = useAppState((state) => state.follow)
+  const reverse = useAppState((state) => state.reverse)
+
+  return (
+    <Box justifyContent="space-between">
+      <Text color="gray">{cwd}</Text>
+      <Text color="cyan">
+        {status} | follow:{follow ? 'on' : 'off'} | reverse:{reverse ? 'on' : 'off'}
+      </Text>
+    </Box>
+  )
+}
+
+===== src/components/VirtualSelectableList.tsx =====
+import React from 'react'
+import { Box } from 'ink'
+import { useVirtualScroll } from '../hooks/useVirtualScroll.js'
+
+export function VirtualSelectableList<T>(props: {
+  items: T[]
+  offset: number
+  viewportSize: number
+  renderItem(item: T, index: number): React.ReactNode
+}): React.ReactElement {
+  const range = useVirtualScroll(props.items.length, props.offset, props.viewportSize)
+  const visible = props.items.slice(range.startIndex, range.endIndex)
+
+  return (
+    <Box flexDirection="column">
+      {visible.map((item, index) => props.renderItem(item, range.startIndex + index))}
+    </Box>
+  )
+}
+
+===== src/context.ts =====
+import process from 'node:process'
+
+export function getOriginalCwd(): string {
+  return process.cwd()
+}
+
+===== src/entrypoints/cli.ts =====
+import { Command } from 'commander'
+import type { LoggerCliOptions } from '../types.js'
+
+export function buildProgram(): Command {
+  return new Command('logger')
+    .description('Interactive mixed JSON/text log viewer')
+    .argument('[files...]', 'Log files to open as tabs')
+    .option('--url <url>', 'Stream logs from an HTTP GET response body')
+    .option('--cmd <command>', 'Spawn a command and read stdout/stderr as log lines')
+    .option('--max <count>', 'Maximum entries to keep in memory', '50000')
+    .option('--preserve-ansi', 'Preserve ANSI in raw text detail view', false)
+}
+
+export function parseCli(argv: string[]): LoggerCliOptions {
+  const program = buildProgram()
+  program.parse(argv)
+  const options = program.opts<{
+    url?: string
+    cmd?: string
+    max: string
+    preserveAnsi?: boolean
+  }>()
+
+  return {
+    files: program.args as string[],
+    url: options.url,
+    cmd: options.cmd,
+    maxEntries: Number.parseInt(options.max, 10) || 50000,
+    preserveAnsi: Boolean(options.preserveAnsi),
+  }
+}
+
+===== src/entrypoints/init.ts =====
+import { setTimeout as delay } from 'node:timers/promises'
+import process from 'node:process'
+
+export interface InitArtifacts {
+  cwd: string
+  startupNotes: string[]
+  deferredPrefetches: Array<() => Promise<void>>
+}
+
+export async function initializeEntrypoint(): Promise<InitArtifacts> {
+  await Promise.all([delay(2), delay(2), delay(2)])
+
+  return {
+    cwd: process.cwd(),
+    startupNotes: [
+      'logger shell initialized',
+      'ingest and parse layers warmed',
+    ],
+    deferredPrefetches: [async () => { await delay(1) }],
+  }
+}
+
+===== src/hooks/useTerminalSize.ts =====
+import { useEffect, useState } from 'react'
+
+export function useTerminalSize(): { columns: number; rows: number } {
+  const [size, setSize] = useState({
+    columns: process.stdout.columns ?? 120,
+    rows: process.stdout.rows ?? 32,
+  })
+
+  useEffect(() => {
+    function updateSize() {
+      setSize({
+        columns: process.stdout.columns ?? 120,
+        rows: process.stdout.rows ?? 32,
+      })
+    }
+
+    process.stdout.on('resize', updateSize)
+    return () => {
+      process.stdout.off('resize', updateSize)
+    }
+  }, [])
+
+  return size
+}
+
+===== src/hooks/useVirtualScroll.ts =====
+import { useMemo } from 'react'
+
+export interface VirtualScrollState {
+  startIndex: number
+  endIndex: number
+}
+
+export function useVirtualScroll(total: number, offset: number, viewportSize: number): VirtualScrollState {
+  return useMemo(() => {
+    const safeViewport = Math.max(viewportSize, 1)
+    const startIndex = Math.max(0, Math.min(offset, Math.max(total - safeViewport, 0)))
+    const endIndex = Math.min(total, startIndex + safeViewport)
+    return { startIndex, endIndex }
+  }, [offset, total, viewportSize])
+}
+
+===== src/ink.tsx =====
+import React from 'react'
+import { render, type Instance, type RenderOptions } from 'ink'
+import { ThemeProvider } from './ink/root.js'
+import { createInkOutputProxy } from './ink/outputProxy.js'
+
+export interface Root {
+  render(node: React.ReactElement): void
+  waitUntilExit(): Promise<void>
+  unmount(error?: Error): void
+}
+
+export async function createRoot(options: RenderOptions): Promise<Root> {
+  let instance: Instance | undefined
+  const inkStdout = createInkOutputProxy(options.stdout)
+
+  function wrap(node: React.ReactElement): React.ReactElement {
+    return <ThemeProvider>{node}</ThemeProvider>
+  }
+
+  return {
+    render(node) {
+      if (!instance) {
+        instance = render(wrap(node), { ...options, stdout: inkStdout })
+        return
+      }
+      instance.rerender(wrap(node))
+    },
+    async waitUntilExit() {
+      if (instance) {
+        await instance.waitUntilExit()
+      }
+    },
+    unmount(error) {
+      instance?.unmount(error)
+    },
+  }
+}
+
+===== src/ink/outputProxy.ts =====
+import process from 'node:process'
+
+const EXTRA_ROWS = 100
+
+export function createInkOutputProxy(
+  stdout: NodeJS.WriteStream = process.stdout,
+): NodeJS.WriteStream {
+  const proxy = Object.create(stdout) as NodeJS.WriteStream
+
+  Object.defineProperty(proxy, 'rows', {
+    get() {
+      return (stdout.rows ?? 24) + EXTRA_ROWS
+    },
+  })
+
+  Object.defineProperty(proxy, 'columns', {
+    get() {
+      return stdout.columns
+    },
+  })
+
+  return proxy
+}
+
+===== src/ink/root.tsx =====
+import React, { createContext, useContext } from 'react'
+
+const ThemeContext = createContext<'cyan' | 'amber'>('cyan')
+
+export function ThemeProvider(props: { children: React.ReactNode }): React.ReactElement {
+  return <ThemeContext.Provider value="cyan">{props.children}</ThemeContext.Provider>
+}
+
+export function useThemeToken(): 'cyan' | 'amber' {
+  return useContext(ThemeContext)
+}
+
+===== src/interactiveHelpers.tsx =====
+import { setTimeout as delay } from 'node:timers/promises'
+import React from 'react'
+import { Box, Text } from 'ink'
+import type { Root } from './ink.js'
+
+export function getRenderContext() {
+  return {
+    renderOptions: {
+      exitOnCtrlC: false,
+    },
+  }
+}
+
+export async function showSetupScreens(root: Root): Promise<void> {
+  root.render(
+    <Box flexDirection="column" padding={1}>
+      <Text color="cyan">logger</Text>
+      <Text dimColor>Preparing mixed log viewer.</Text>
+    </Box>,
+  )
+  await delay(25)
+}
+
+export async function renderAndRun(root: Root, deferredPrefetches: Array<() => Promise<void>>): Promise<void> {
+  await Promise.allSettled(deferredPrefetches.map((prefetch) => prefetch()))
+  await root.waitUntilExit()
+}
+
+===== src/lib/ingest/commandSource.ts =====
+import { spawn } from 'node:child_process'
+import { LineSplitter } from './lineSplitter.js'
+import type { SourceCallbacks, SourceSubscription } from './sourceTypes.js'
+import type { SourceSpec } from '../../types.js'
+
+export function createCommandSource(spec: SourceSpec, callbacks: SourceCallbacks): SourceSubscription {
+  const child = spawn('sh', ['-c', spec.location], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const splitter = new LineSplitter()
+
+  function handleChunk(chunk: Buffer | string) {
+    const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+    for (const line of splitter.push(text)) {
+      callbacks.onLine(line)
+    }
+  }
+
+  child.stdout.on('data', handleChunk)
+  child.stderr.on('data', handleChunk)
+  child.on('close', () => {
+    for (const line of splitter.flush()) {
+      callbacks.onLine(line)
+    }
+    callbacks.onEnd()
+  })
+  child.on('error', (error) => callbacks.onError(error))
+
+  return {
+    spec,
+    stop() {
+      child.kill('SIGTERM')
+    },
+  }
+}
+
+===== src/lib/ingest/createSources.ts =====
+import path from 'node:path'
+import type { LoggerCliOptions, SourceSpec } from '../../types.js'
+
+export function createSourceSpecs(options: LoggerCliOptions, stdinIsTty: boolean): SourceSpec[] {
+  if (options.files.length > 0) {
+    return options.files.map((file, index) => ({
+      id: `file-${index}`,
+      label: path.basename(file),
+      type: 'file',
+      location: file,
+    }))
+  }
+
+  if (options.url) {
+    return [{
+      id: 'url-0',
+      label: 'url',
+      type: 'url',
+      location: options.url,
+    }]
+  }
+
+  if (options.cmd) {
+    return [{
+      id: 'cmd-0',
+      label: 'cmd',
+      type: 'cmd',
+      location: options.cmd,
+    }]
+  }
+
+  if (!stdinIsTty) {
+    return [{
+      id: 'stdin-0',
+      label: 'stdin',
+      type: 'stdin',
+      location: 'stdin',
+    }]
+  }
+
+  return []
+}
+
+===== src/lib/ingest/fileSource.ts =====
+import fs from 'node:fs'
+import path from 'node:path'
+import { LineSplitter } from './lineSplitter.js'
+import type { SourceCallbacks, SourceSubscription } from './sourceTypes.js'
+import type { SourceSpec } from '../../types.js'
+
+export function createFileSource(spec: SourceSpec, callbacks: SourceCallbacks): SourceSubscription {
+  const stream = fs.createReadStream(path.resolve(spec.location), { encoding: 'utf8' })
+  const splitter = new LineSplitter()
+
+  stream.on('data', (chunk: string | Buffer) => {
+    const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+    for (const line of splitter.push(text)) {
+      callbacks.onLine(line)
+    }
+  })
+  stream.on('end', () => {
+    for (const line of splitter.flush()) {
+      callbacks.onLine(line)
+    }
+    callbacks.onEnd()
+  })
+  stream.on('error', (error) => callbacks.onError(error))
+
+  return {
+    spec,
+    stop() {
+      stream.destroy()
+    },
+  }
+}
+
+===== src/lib/ingest/lineSplitter.ts =====
+export class LineSplitter {
+  private remainder = ''
+
+  push(chunk: string): string[] {
+    const combined = this.remainder + chunk
+    const lines = combined.split(/\r?\n/)
+    this.remainder = lines.pop() ?? ''
+    return lines
+  }
+
+  flush(): string[] {
+    if (!this.remainder) {
+      return []
+    }
+    const last = this.remainder
+    this.remainder = ''
+    return [last]
+  }
+}
+
+===== src/lib/ingest/ringBuffer.ts =====
+export class RingBuffer<T> {
+  private readonly values: T[] = []
+
+  constructor(private readonly maxSize: number) {}
+
+  push(value: T): void {
+    this.values.push(value)
+    if (this.values.length > this.maxSize) {
+      this.values.splice(0, this.values.length - this.maxSize)
+    }
+  }
+
+  toArray(reverse = false): T[] {
+    return reverse ? [...this.values].reverse() : [...this.values]
+  }
+
+  get size(): number {
+    return this.values.length
+  }
+}
+
+===== src/lib/ingest/sourceTypes.ts =====
+import type { SourceSpec } from '../../types.js'
+
+export interface SourceSubscription {
+  spec: SourceSpec
+  stop(): void
+}
+
+export interface SourceCallbacks {
+  onLine(line: string): void
+  onError(error: Error): void
+  onEnd(): void
+}
+
+===== src/lib/ingest/stdinSource.ts =====
+import process from 'node:process'
+import { LineSplitter } from './lineSplitter.js'
+import type { SourceCallbacks, SourceSubscription } from './sourceTypes.js'
+import type { SourceSpec } from '../../types.js'
+
+export function createStdinSource(spec: SourceSpec, callbacks: SourceCallbacks): SourceSubscription {
+  const splitter = new LineSplitter()
+
+  function onData(chunk: Buffer | string) {
+    const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+    for (const line of splitter.push(text)) {
+      callbacks.onLine(line)
+    }
+  }
+
+  function onEnd() {
+    for (const line of splitter.flush()) {
+      callbacks.onLine(line)
+    }
+    callbacks.onEnd()
+  }
+
+  process.stdin.setEncoding('utf8')
+  process.stdin.on('data', onData)
+  process.stdin.on('end', onEnd)
+  process.stdin.resume()
+
+  return {
+    spec,
+    stop() {
+      process.stdin.off('data', onData)
+      process.stdin.off('end', onEnd)
+    },
+  }
+}
+
+===== src/lib/ingest/urlSource.ts =====
+import { LineSplitter } from './lineSplitter.js'
+import type { SourceCallbacks, SourceSubscription } from './sourceTypes.js'
+import type { SourceSpec } from '../../types.js'
+
+export function createUrlSource(spec: SourceSpec, callbacks: SourceCallbacks): SourceSubscription {
+  const controller = new AbortController()
+  const splitter = new LineSplitter()
+
+  void (async () => {
+    try {
+      const response = await fetch(spec.location, { signal: controller.signal })
+      if (!response.body) {
+        throw new Error(`No response body for ${spec.location}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) {
+          break
+        }
+        const chunk = decoder.decode(value, { stream: true })
+        for (const line of splitter.push(chunk)) {
+          callbacks.onLine(line)
+        }
+      }
+
+      for (const line of splitter.flush()) {
+        callbacks.onLine(line)
+      }
+      callbacks.onEnd()
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        return
+      }
+      callbacks.onError(error as Error)
+    }
+  })()
+
+  return {
+    spec,
+    stop() {
+      controller.abort()
+    },
+  }
+}
+
+===== src/lib/parse/heuristics.ts =====
+import { normalizeLevel } from './normalizeLevel.js'
+
+function firstValue(record: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    if (key in record) {
+      return record[key]
+    }
+  }
+  return undefined
+}
+
+export function extractTime(record: Record<string, unknown>): { time?: string; timestampMs?: number } {
+  const raw = firstValue(record, ['time', 'timestamp', 'ts'])
+  if (raw === undefined) {
+    return {}
+  }
+  if (typeof raw === 'number') {
+    return {
+      time: new Date(raw).toISOString(),
+      timestampMs: raw,
+    }
+  }
+  const maybeDate = new Date(String(raw))
+  if (!Number.isNaN(maybeDate.getTime())) {
+    return {
+      time: maybeDate.toISOString(),
+      timestampMs: maybeDate.getTime(),
+    }
+  }
+  return { time: String(raw) }
+}
+
+export function extractLevel(record: Record<string, unknown>): { levelRaw?: string; level: ReturnType<typeof normalizeLevel> } {
+  const raw = firstValue(record, ['level', 'severity'])
+  return {
+    levelRaw: raw === undefined ? undefined : String(raw),
+    level: normalizeLevel(raw),
+  }
+}
+
+export function extractMessage(record: Record<string, unknown>): string {
+  const raw = firstValue(record, ['msg', 'message'])
+  if (raw !== undefined) {
+    return String(raw)
+  }
+
+  const json = JSON.stringify(record)
+  return json.length > 160 ? `${json.slice(0, 157)}...` : json
+}
+
+===== src/lib/parse/normalizeLevel.ts =====
+import type { NormalizedLevel } from '../../types.js'
+
+export function normalizeLevel(value: unknown): NormalizedLevel {
+  const raw = String(value ?? '').toLowerCase()
+  if (raw.includes('trace')) return 'trace'
+  if (raw.includes('debug')) return 'debug'
+  if (raw === 'warning' || raw.includes('warn')) return 'warn'
+  if (raw.includes('error')) return 'error'
+  if (raw.includes('fatal')) return 'fatal'
+  if (raw.includes('info')) return 'info'
+  return 'unknown'
+}
+
+===== src/lib/parse/parseLine.ts =====
+import type { ParsedLine } from '../../types.js'
+import { extractLevel, extractMessage, extractTime } from './heuristics.js'
+import { normalizeLevel } from './normalizeLevel.js'
+import { parsePrefixedJson } from './parsePrefixedJson.js'
+
+function parseJson(text: string): unknown | undefined {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return undefined
+  }
+}
+
+export function parseLine(raw: string): ParsedLine {
+  const prefixed = parsePrefixedJson(raw)
+  const candidateJson = prefixed.jsonText ?? raw.trim()
+  const parsed = parseJson(candidateJson)
+
+  if (parsed && typeof parsed === 'object' && parsed !== null) {
+    const record = parsed as Record<string, unknown>
+    const time = extractTime(record)
+    const level = extractLevel(record)
+    return {
+      prefix: prefixed.prefix,
+      kind: 'json',
+      parsed,
+      ...time,
+      ...level,
+      message: extractMessage(record),
+    }
+  }
+
+  return {
+    kind: 'text',
+    prefix: prefixed.prefix,
+    level: normalizeLevel(undefined),
+    message: raw,
+  }
+}
+
+===== src/lib/parse/parsePrefixedJson.ts =====
+export function parsePrefixedJson(line: string): { prefix?: string; jsonText?: string } {
+  const divider = ' | '
+  const index = line.indexOf(divider)
+  if (index < 0) {
+    return {}
+  }
+
+  const prefix = line.slice(0, index).trim()
+  const jsonText = line.slice(index + divider.length).trim()
+
+  if (!jsonText.startsWith('{') && !jsonText.startsWith('[')) {
+    return {}
+  }
+
+  return { prefix, jsonText }
+}
+
+===== src/main.tsx =====
+#!/usr/bin/env node
+import { fileURLToPath } from 'node:url'
+import process from 'node:process'
+import { parseCli } from './entrypoints/cli.js'
+import { initializeEntrypoint } from './entrypoints/init.js'
+import { createRoot } from './ink.js'
+import { getRenderContext, renderAndRun, showSetupScreens } from './interactiveHelpers.js'
+import { launchRepl } from './replLauncher.js'
+import { QueryEngine } from './QueryEngine.js'
+
+interface RuntimeIo {
+  stdout?: Pick<typeof process.stdout, 'write'>
+}
+
+export async function runCli(argv: string[], io: RuntimeIo = {}): Promise<number> {
+  const options = parseCli(argv)
+  const init = await initializeEntrypoint()
+  const root = await createRoot(getRenderContext().renderOptions)
+  await showSetupScreens(root)
+  await launchRepl({
+    root,
+    options,
+    init,
+    queryEngine: new QueryEngine(),
+  })
+  await renderAndRun(root, init.deferredPrefetches)
+  return 0
+}
+
+export async function main(argv: string[] = process.argv): Promise<void> {
+  try {
+    process.exitCode = await runCli(argv)
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`)
+    process.exitCode = 1
+  }
+}
+
+const currentFilePath = fileURLToPath(import.meta.url)
+const isBunMain = typeof (import.meta as ImportMeta & { main?: boolean }).main === 'boolean'
+  ? Boolean((import.meta as ImportMeta & { main?: boolean }).main)
+  : false
+
+if (isBunMain || process.argv[1] === currentFilePath) {
+  void main()
+}
+
+===== src/query.ts =====
+import type { LogEntry } from './types.js'
+
+export function getBottomIndex(length: number, reverse: boolean): number {
+  if (length === 0) {
+    return 0
+  }
+  return reverse ? 0 : length - 1
+}
+
+export function shouldFollowSelection(selectedIndex: number, length: number, reverse: boolean): boolean {
+  if (length === 0) {
+    return true
+  }
+  return selectedIndex === getBottomIndex(length, reverse)
+}
+
+export function clampIndex(index: number, length: number): number {
+  if (length <= 0) {
+    return 0
+  }
+  return Math.max(0, Math.min(index, length - 1))
+}
+
+===== src/replLauncher.tsx =====
+import React from 'react'
+import { App } from './components/App.js'
+import { REPL } from './screens/REPL.js'
+import type { Root } from './ink.js'
+import type { LoggerCliOptions } from './types.js'
+import type { InitArtifacts } from './entrypoints/init.js'
+import type { QueryEngine } from './QueryEngine.js'
+
+export async function launchRepl(args: {
+  root: Root
+  options: LoggerCliOptions
+  init: InitArtifacts
+  queryEngine: QueryEngine
+}): Promise<void> {
+  args.root.render(
+    <App initialCwd={args.init.cwd} startupNotes={args.init.startupNotes} theme="cyan">
+      <REPL options={args.options} queryEngine={args.queryEngine} />
+    </App>,
+  )
+}
+
+===== src/screens/REPL.tsx =====
+import React, { useEffect, useMemo, useState } from 'react'
+import { Box, Text, useApp, useInput } from 'ink'
+import { Header } from '../components/Header.js'
+import { Footer } from '../components/Footer.js'
+import { HelpModal } from '../components/HelpModal.js'
+import { JsonTree } from '../components/JsonTree.js'
+import { LogListRow } from '../components/LogListRow.js'
+import { RawTextView } from '../components/RawTextView.js'
+import { StatusLine } from '../components/StatusLine.js'
+import { VirtualSelectableList } from '../components/VirtualSelectableList.js'
+import { useAppState, useAppStateStore } from '../state/AppState.js'
+import { useTerminalSize } from '../hooks/useTerminalSize.js'
+import { QueryEngine, type LoggerSession } from '../QueryEngine.js'
+import { clampIndex, getBottomIndex, shouldFollowSelection } from '../query.js'
+import type { JsonTreeLine, LoggerCliOptions, LogEntry } from '../types.js'
+
+function flattenJson(value: unknown, foldState: Set<string>, path = '$', depth = 0, key?: string): JsonTreeLine[] {
+  const isObject = value !== null && typeof value === 'object'
+  const collapsible = isObject
+  const collapsed = collapsible && foldState.has(path)
+  const preview =
+    key !== undefined
+      ? `${key}: ${typeof value === 'string' ? JSON.stringify(value) : Array.isArray(value) ? '[...]' : value === null ? 'null' : isObject ? '{...}' : String(value)}`
+      : typeof value === 'string'
+        ? JSON.stringify(value)
+        : Array.isArray(value)
+          ? '[...]'
+          : value === null
+            ? 'null'
+            : isObject
+              ? '{...}'
+              : String(value)
+
+  const lines: JsonTreeLine[] = [{
+    id: path,
+    depth,
+    key,
+    valuePreview: preview,
+    collapsible,
+    collapsed,
+  }]
+
+  if (!isObject || collapsed) {
+    return lines
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((child, index) => {
+      lines.push(...flattenJson(child, foldState, `${path}[${index}]`, depth + 1, `[${index}]`))
+    })
+    return lines
+  }
+
+  for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+    lines.push(...flattenJson(childValue, foldState, `${path}.${childKey}`, depth + 1, childKey))
+  }
+
+  return lines
+}
+
+export function REPL(props: {
+  options: LoggerCliOptions
+  queryEngine: QueryEngine
+}): React.ReactElement {
+  const { exit } = useApp()
+  const store = useAppStateStore()
+  const activeTabIndex = useAppState((state) => state.activeTabIndex)
+  const selectedIndex = useAppState((state) => state.selectedIndex)
+  const paneFocus = useAppState((state) => state.paneFocus)
+  const helpOpen = useAppState((state) => state.helpOpen)
+  const reverse = useAppState((state) => state.reverse)
+  const follow = useAppState((state) => state.follow)
+  const detailCursorIndex = useAppState((state) => state.detailCursorIndex)
+  const detailViewMode = useAppState((state) => state.detailViewMode)
+  const terminal = useTerminalSize()
+  const [session, setSession] = useState<LoggerSession | null>(null)
+  const [version, setVersion] = useState(0)
+  const [foldState, setFoldState] = useState<Set<string>>(new Set())
+  const sessionRef = React.useRef<LoggerSession | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    void props.queryEngine.start(props.options).then((nextSession) => {
+      if (!mounted) {
+        nextSession.stop()
+        return
+      }
+      sessionRef.current = nextSession
+      setSession(nextSession)
+      store.setState({
+        statusLine: nextSession.specs.length > 0 ? 'Streaming logs' : 'No source configured. Pass files, stdin, --url, or --cmd.',
+      })
+      return nextSession.subscribe(() => {
+        setVersion((current) => current + 1)
+      })
+    })
+
+    return () => {
+      mounted = false
+      sessionRef.current?.stop()
+    }
+  }, [])
+
+  const snapshot = session?.getSnapshot() ?? { version: 0, sources: [] }
+  const activeSource = snapshot.sources[activeTabIndex]
+  const activeEntries = useMemo(
+    () => (activeSource ? session?.getEntries(activeSource.spec.id, reverse) ?? [] : []),
+    [session, activeSource?.spec.id, reverse, version],
+  )
+
+  useEffect(() => {
+    const bottomIndex = getBottomIndex(activeEntries.length, reverse)
+    if (follow) {
+      store.setState((current) => ({
+        ...current,
+        selectedIndex: bottomIndex,
+      }))
+    } else {
+      store.setState((current) => ({
+        ...current,
+        selectedIndex: clampIndex(current.selectedIndex, activeEntries.length),
+      }))
+    }
+  }, [activeEntries.length, reverse, follow, store])
+
+  const selectedEntry = activeEntries[clampIndex(selectedIndex, activeEntries.length)]
+  const treeLines = useMemo(
+    () => (selectedEntry?.kind === 'json' ? flattenJson(selectedEntry.parsed, foldState) : []),
+    [selectedEntry, foldState],
+  )
+
+  function moveSelection(delta: number) {
+    store.setState((current) => {
+      const nextIndex = clampIndex(current.selectedIndex + delta, activeEntries.length)
+      return {
+        ...current,
+        selectedIndex: nextIndex,
+        follow: shouldFollowSelection(nextIndex, activeEntries.length, current.reverse),
+      }
+    })
+  }
+
+  function jumpSelection(target: number) {
+    const nextIndex = clampIndex(target, activeEntries.length)
+    store.setState((current) => ({
+      ...current,
+      selectedIndex: nextIndex,
+      follow: shouldFollowSelection(nextIndex, activeEntries.length, current.reverse),
+    }))
+  }
+
+  useInput((input, key) => {
+    const extendedKey = key as typeof key & { f1?: boolean; home?: boolean; end?: boolean }
+
+    if (helpOpen) {
+      if (key.escape || input === 'q' || extendedKey.f1 || input === '?') {
+        store.setState({ helpOpen: false })
+      }
+      return
+    }
+
+    if (extendedKey.f1 || input === '?') {
+      store.setState({ helpOpen: true })
+      return
+    }
+
+    if (input === 'q') {
+      exit()
+      return
+    }
+
+    if (input === 'R') {
+      store.setState((current) => ({
+        ...current,
+        reverse: !current.reverse,
+        follow: true,
+      }))
+      return
+    }
+
+    if (key.tab) {
+      store.setState((current) => ({
+        ...current,
+        activeTabIndex: snapshot.sources.length === 0 ? 0 : (current.activeTabIndex + 1) % snapshot.sources.length,
+        selectedIndex: 0,
+        follow: true,
+      }))
+      return
+    }
+
+    if (key.shift && key.tab) {
+      store.setState((current) => ({
+        ...current,
+        activeTabIndex: snapshot.sources.length === 0 ? 0 : (current.activeTabIndex - 1 + snapshot.sources.length) % snapshot.sources.length,
+        selectedIndex: 0,
+        follow: true,
+      }))
+      return
+    }
+
+    if (paneFocus === 'detail' && selectedEntry?.kind === 'json') {
+      if (key.escape) {
+        store.setState({ paneFocus: 'list' })
+        return
+      }
+      if (key.return) {
+        store.setState({ paneFocus: 'list' })
+        return
+      }
+      if (key.upArrow || input === 'k') {
+        store.setState((current) => ({ ...current, detailCursorIndex: clampIndex(current.detailCursorIndex - 1, treeLines.length) }))
+        return
+      }
+      if (key.downArrow || input === 'j') {
+        store.setState((current) => ({ ...current, detailCursorIndex: clampIndex(current.detailCursorIndex + 1, treeLines.length) }))
+        return
+      }
+      if (input === ' ') {
+        const line = treeLines[detailCursorIndex]
+        if (line?.collapsible) {
+          setFoldState((current) => {
+            const next = new Set(current)
+            if (next.has(line.id)) next.delete(line.id)
+            else next.add(line.id)
+            return next
+          })
+        }
+      }
+      return
+    }
+
+    if (paneFocus === 'detail' && selectedEntry?.kind === 'text') {
+      if (key.escape || key.return) {
+        store.setState({ paneFocus: 'list' })
+      }
+      return
+    }
+
+    if (key.return) {
+      store.setState({ paneFocus: 'detail', detailCursorIndex: 0 })
+      return
+    }
+
+    if (key.upArrow || input === 'k') {
+      moveSelection(-1)
+      return
+    }
+    if (key.downArrow || input === 'j') {
+      moveSelection(1)
+      return
+    }
+    if (key.pageUp) {
+      moveSelection(-10)
+      return
+    }
+    if (key.pageDown) {
+      moveSelection(10)
+      return
+    }
+    if (extendedKey.home || input === 'g') {
+      jumpSelection(0)
+      return
+    }
+    if (extendedKey.end || input === 'G') {
+      jumpSelection(activeEntries.length - 1)
+    }
+  })
+
+  const listHeight = Math.max(8, terminal.rows - 10)
+  const listWidth = Math.min(60, Math.max(36, Math.floor(terminal.columns * 0.45)))
+  const detailWidth = Math.max(40, terminal.columns - listWidth - 4)
+  const listOffset = Math.max(0, Math.min(
+    selectedIndex - Math.floor(listHeight / 2),
+    Math.max(activeEntries.length - listHeight, 0),
+  ))
+
+  return (
+    <Box flexDirection="column">
+      <StatusLine />
+      <Header sources={snapshot.sources} activeTabIndex={activeTabIndex} />
+      {helpOpen ? <HelpModal /> : null}
+      <Box flexDirection="row">
+        <Box flexDirection="column" width={listWidth}>
+          <VirtualSelectableList
+            items={activeEntries}
+            offset={listOffset}
+            viewportSize={listHeight}
+            renderItem={(entry: LogEntry, index: number) => (
+              <LogListRow
+                key={entry.id}
+                entry={entry}
+                selected={index === selectedIndex}
+                width={listWidth - 3}
+              />
+            )}
+          />
+        </Box>
+        <Box width={detailWidth} marginLeft={2} flexDirection="column">
+          {!selectedEntry ? (
+            <Text color="gray">No entry selected</Text>
+          ) : selectedEntry.kind === 'json' && detailViewMode === 'tree' ? (
+            <JsonTree value={selectedEntry.parsed} foldState={foldState} selectedIndex={detailCursorIndex} />
+          ) : (
+            <RawTextView text={selectedEntry.raw} />
+          )}
+        </Box>
+      </Box>
+      <Footer follow={follow} paneFocus={paneFocus} />
+    </Box>
+  )
+}
+
+===== src/state/AppState.tsx =====
+import React, { createContext, useContext, useRef, useSyncExternalStore } from 'react'
+import { AppStateStore, createInitialAppState, type AppState } from './AppStateStore.js'
+
+const AppStateContext = createContext<AppStateStore | null>(null)
+
+export function AppStateProvider(props: { cwd: string; children: React.ReactNode }): React.ReactElement {
+  const storeRef = useRef<AppStateStore>()
+  if (!storeRef.current) {
+    storeRef.current = new AppStateStore(createInitialAppState(props.cwd))
+  }
+  return <AppStateContext.Provider value={storeRef.current}>{props.children}</AppStateContext.Provider>
+}
+
+export function useAppState<T>(selector: (state: AppState) => T): T {
+  const store = useContext(AppStateContext)
+  if (!store) {
+    throw new Error('useAppState must be used within AppStateProvider')
+  }
+  return useSyncExternalStore(store.subscribe.bind(store), () => selector(store.getState()))
+}
+
+export function useAppStateStore(): AppStateStore {
+  const store = useContext(AppStateContext)
+  if (!store) {
+    throw new Error('useAppStateStore must be used within AppStateProvider')
+  }
+  return store
+}
+
+===== src/state/AppStateStore.ts =====
+import type { DetailViewMode, PaneFocus } from '../types.js'
+
+export interface AppState {
+  cwd: string
+  statusLine: string
+  activeTabIndex: number
+  selectedIndex: number
+  paneFocus: PaneFocus
+  helpOpen: boolean
+  reverse: boolean
+  follow: boolean
+  detailViewMode: DetailViewMode
+  detailCursorIndex: number
+}
+
+type Listener = () => void
+
+export class AppStateStore {
+  private state: AppState
+  private listeners = new Set<Listener>()
+
+  constructor(initial: AppState) {
+    this.state = initial
+  }
+
+  getState(): AppState {
+    return this.state
+  }
+
+  setState(update: Partial<AppState> | ((current: AppState) => AppState)): void {
+    this.state = typeof update === 'function' ? update(this.state) : { ...this.state, ...update }
+    for (const listener of this.listeners) {
+      listener()
+    }
+  }
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+}
+
+export function createInitialAppState(cwd: string): AppState {
+  return {
+    cwd,
+    statusLine: 'Waiting for logs',
+    activeTabIndex: 0,
+    selectedIndex: 0,
+    paneFocus: 'list',
+    helpOpen: false,
+    reverse: false,
+    follow: true,
+    detailViewMode: 'tree',
+    detailCursorIndex: 0,
+  }
+}
+
+===== src/types.ts =====
+export type EntryKind = 'json' | 'text'
+export type NormalizedLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'unknown'
+export type SourceType = 'file' | 'stdin' | 'url' | 'cmd'
+export type PaneFocus = 'list' | 'detail'
+export type DetailViewMode = 'tree' | 'raw'
+
+export interface SourceSpec {
+  id: string
+  label: string
+  type: SourceType
+  location: string
+}
+
+export interface LoggerCliOptions {
+  files: string[]
+  url?: string
+  cmd?: string
+  maxEntries: number
+  preserveAnsi: boolean
+}
+
+export interface LogEntry {
+  id: number
+  sourceId: string
+  raw: string
+  prefix?: string
+  kind: EntryKind
+  parsed?: unknown
+  time?: string
+  timestampMs?: number
+  level: NormalizedLevel
+  levelRaw?: string
+  message: string
+}
+
+export interface ParsedLine {
+  prefix?: string
+  kind: EntryKind
+  parsed?: unknown
+  time?: string
+  timestampMs?: number
+  level: NormalizedLevel
+  levelRaw?: string
+  message: string
+}
+
+export interface JsonTreeLine {
+  id: string
+  depth: number
+  key?: string
+  valuePreview: string
+  collapsible: boolean
+  collapsed: boolean
+}
+
+export interface SourceSnapshot {
+  spec: SourceSpec
+  total: number
+  jsonCount: number
+  textCount: number
+}
+
+export interface LoggerSnapshot {
+  version: number
+  sources: SourceSnapshot[]
+}
+
+===== tests/e2e/help.test.ts =====
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import path from 'node:path'
+
+const execFileAsync = promisify(execFile)
+
+test('built cli shows help', async () => {
+  const entry = path.resolve(process.cwd(), 'dist/main.js')
+  const { stdout } = await execFileAsync(process.execPath, [entry, '--help'])
+  assert.match(stdout, /Interactive mixed JSON\/text log viewer/)
+  assert.match(stdout, /--url/)
+  assert.match(stdout, /--cmd/)
+})
+
+===== tests/line-splitter.test.ts =====
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { LineSplitter } from '../src/lib/ingest/lineSplitter.js'
+
+test('LineSplitter carries remainder across chunks', () => {
+  const splitter = new LineSplitter()
+  assert.deepEqual(splitter.push('one\ntw'), ['one'])
+  assert.deepEqual(splitter.push('o\nthree'), ['two'])
+  assert.deepEqual(splitter.flush(), ['three'])
+})
+
+===== tests/parse-line.test.ts =====
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { parseLine } from '../src/lib/parse/parseLine.js'
+
+test('parseLine parses plain JSON log lines', () => {
+  const parsed = parseLine('{"time":"2026-04-21T19:00:00Z","level":"info","message":"hello"}')
+  assert.equal(parsed.kind, 'json')
+  assert.equal(parsed.level, 'info')
+  assert.equal(parsed.message, 'hello')
+  assert.equal(parsed.time, '2026-04-21T19:00:00.000Z')
+})
+
+test('parseLine parses prefixed JSON lines', () => {
+  const parsed = parseLine('api-1 | {"severity":"warn","msg":"limit soon"}')
+  assert.equal(parsed.kind, 'json')
+  assert.equal(parsed.prefix, 'api-1')
+  assert.equal(parsed.level, 'warn')
+  assert.equal(parsed.message, 'limit soon')
+})
+
+test('parseLine falls back to plain text', () => {
+  const parsed = parseLine('plain text log entry')
+  assert.equal(parsed.kind, 'text')
+  assert.equal(parsed.message, 'plain text log entry')
+})
+
+===== tests/ring-buffer.test.ts =====
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { RingBuffer } from '../src/lib/ingest/ringBuffer.js'
+
+test('RingBuffer keeps only the configured max number of items', () => {
+  const buffer = new RingBuffer<number>(3)
+  buffer.push(1)
+  buffer.push(2)
+  buffer.push(3)
+  buffer.push(4)
+
+  assert.deepEqual(buffer.toArray(), [2, 3, 4])
+  assert.deepEqual(buffer.toArray(true), [4, 3, 2])
+})
+
+===== tests/source-specs.test.ts =====
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { createSourceSpecs } from '../src/lib/ingest/createSources.js'
+
+test('createSourceSpecs prefers files over stdin', () => {
+  const specs = createSourceSpecs({
+    files: ['a.log', 'b.log'],
+    maxEntries: 10,
+    preserveAnsi: false,
+  }, false)
+  assert.equal(specs.length, 2)
+  assert.equal(specs[0]?.type, 'file')
+})
+
+test('createSourceSpecs chooses stdin when no explicit source is provided', () => {
+  const specs = createSourceSpecs({
+    files: [],
+    maxEntries: 10,
+    preserveAnsi: false,
+  }, false)
+  assert.equal(specs[0]?.type, 'stdin')
+})
+
+===== tsconfig.json =====
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmitOnError": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node", "bun"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
+
+===== vendor/react-devtools-core/index.js =====
+export default {
+  connectToDevTools() {
+    // Optional shim so Bun compile works with Ink.
+  }
+};
+
+===== vendor/react-devtools-core/package.json =====
+{
+  "name": "react-devtools-core",
+  "version": "0.0.0-shell-shim",
+  "type": "module",
+  "main": "./index.js"
+}
