@@ -7,6 +7,7 @@ export interface KeyLike {
   pageDown?: boolean
   tab?: boolean
   shift?: boolean
+  ctrl?: boolean
   return?: boolean
   escape?: boolean
 }
@@ -14,6 +15,8 @@ export interface KeyLike {
 const DEFAULT_BINDINGS: Record<KeyAction, string[]> = {
   openHelp: ['f1', '?'],
   openFilter: ['F', '/'],
+  nextMode: ['shift+down'],
+  prevMode: ['shift+up'],
   toggleReverse: ['R'],
   levelTrace: ['1'],
   levelDebug: ['2'],
@@ -39,18 +42,26 @@ const DEFAULT_BINDINGS: Record<KeyAction, string[]> = {
   copyPath: ['p'],
   toggleAnsi: ['a'],
   cycleMergeSort: ['M'],
+  copyQuery: ['ctrl+q'],
+  copyQueryResult: ['ctrl+o'],
+  acceptAutocomplete: ['tab'],
+  expandAll: ['ctrl+p'],
+  collapseAll: ['ctrl+n'],
 }
 
 function normalizeInput(input: string, key: KeyLike): string[] {
   const values: string[] = []
   if (key.upArrow) values.push('up')
   if (key.downArrow) values.push('down')
+  if (key.upArrow && key.shift) values.push('shift+up')
+  if (key.downArrow && key.shift) values.push('shift+down')
   if (key.pageUp) values.push('pageup')
   if (key.pageDown) values.push('pagedown')
   if (key.return) values.push('enter')
   if (key.escape) values.push('escape')
   if (key.tab && key.shift) values.push('shift+tab')
   else if (key.tab) values.push('tab')
+  if (key.ctrl && input) values.push(`ctrl+${input}`)
   if (input === ' ') values.push('space')
   if (input) values.push(input)
   return values

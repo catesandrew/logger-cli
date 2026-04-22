@@ -1,327 +1,4 @@
 
-===== package.json =====
-{
-  "name": "logger",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "packageManager": "bun@1.3.1",
-  "bin": {
-    "logger": "./bin/logger"
-  },
-  "scripts": {
-    "dev": "bun run src/main.tsx",
-    "build": "bunx tsc -p tsconfig.json",
-    "start": "bun run dist/main.js",
-    "typecheck": "bunx tsc -p tsconfig.json --noEmit",
-    "test": "bun test tests/*.test.ts",
-    "test:e2e": "bun run build && bun test tests/e2e/*.test.ts",
-    "repo:dump": "find . \\( -path './node_modules' -o -path './dist' \\) -prune -o -type f -print | sort | while read f; do printf '\\n===== %s =====\\n' \"$f\"; cat \"$f\"; done > REPO_DUMP.txt",
-    "compile:exe": "bun build --compile ./src/main.tsx --outfile ./bin/logger"
-  },
-  "dependencies": {
-    "clipboardy": "^4.0.0",
-    "commander": "^13.1.0",
-    "handlebars": "^4.7.8",
-    "ink": "^5.2.1",
-    "ink-text-input": "^6.0.0",
-    "react": "^18.3.1",
-    "react-devtools-core": "file:./vendor/react-devtools-core",
-    "zod": "^3.24.1"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.3.9",
-    "@types/node": "^24.0.0",
-    "@types/react": "^18.3.18",
-    "typescript": "^5.8.3"
-  }
-}
-
-===== README.md =====
-# logger
-
-`logger` is a Bun-first TUI for browsing mixed server log streams.
-
-It is optimized for:
-
-- JSONL most of the time
-- plain text sometimes
-- files, stdin, HTTP streams, or spawned commands
-- a compact virtualized list on the left
-- a JSON tree or raw text details view on the right
-
-## Usage
-
-```bash
-bun install
-bun run dev -- examples/mixed.log
-```
-
-## Quick Start
-
-From the repo root:
-
-```bash
-cd /usr/local/personal/logger-cli
-bun install
-bun run dev -- examples/mixed.log
-```
-
-That starts the interactive TUI immediately.
-
-Open multiple files as tabs:
-
-```bash
-bun run dev -- access.log app.log
-```
-
-Read from stdin:
-
-```bash
-cat examples/mixed.log | bun run dev --
-```
-
-Stream from a URL:
-
-```bash
-bun run dev -- --url https://example.com/logs
-```
-
-Stream from a command:
-
-```bash
-bun run dev -- --cmd "docker logs -f my-container 2>&1"
-```
-
-Load config from an explicit path:
-
-```bash
-bun run dev -- --config ./logger.jsonc examples/mixed.log
-```
-
-Merge multiple live sources:
-
-```bash
-bun run dev -- --merge --merge-sort time app.log --url https://example.com/logs --cmd "docker logs -f app 2>&1"
-```
-
-Use config-driven columns:
-
-```bash
-cp examples/.logger.jsonc ./.logger.jsonc
-bun run dev -- examples/mixed.log
-```
-
-Keybinding remaps and merge-sort remap example:
-
-```jsonc
-{
-  "columns": [
-    { "key": "client", "path": "$.client" }
-  ],
-  "keybindings": {
-    "toggleReverse": ["v"],
-    "cycleMergeSort": ["S"]
-  }
-}
-```
-
-Supported keybinding action ids:
-
-```text
-openHelp
-openFilter
-toggleReverse
-nextTab
-prevTab
-moveUp
-moveDown
-pageUp
-pageDown
-jumpTop
-jumpBottom
-enterDetail
-leaveDetail
-toggleFold
-detailSearch
-repeatSearchNext
-repeatSearchPrev
-copyValue
-copyPath
-toggleAnsi
-cycleMergeSort
-```
-
-Config lookup order:
-
-1. `--config path`
-2. `./.logger.jsonc`
-3. `$HOME/.config/logger/config.jsonc`
-
-Built CLI:
-
-```bash
-bun run build
-bun run start -- examples/mixed.log
-./bin/logger examples/mixed.log
-```
-
-Compiled executable:
-
-```bash
-bun run compile:exe
-./bin/logger examples/mixed.log
-```
-
-## Keybindings
-
-- `F` or `/`: open advanced filter bar
-- `1` trace toggle
-- `2` debug toggle
-- `3` info toggle
-- `4` warn toggle
-- `5` error toggle
-- `6` fatal toggle
-- `Up` / `Down` or `j` / `k`: move selection
-- `PgUp` / `PgDn`: page
-- `Home` / `End`: jump beginning/end
-- `g` / `G`: jump top/bottom
-- `Tab`: next source tab
-- `Shift+Tab`: previous source tab
-- `Enter`: toggle detail focus
-- `Esc`: leave detail focus / close help
-- `/`: open filter mode
-- `Space`: fold/unfold current JSON node in detail pane
-- `R`: reverse order
-- `M`: cycle merge sort in merged mode
-- `F1` or `?`: help
-- `q`: quit
-
-## Filter language
-
-Examples:
-
-```text
-request.method = "GET"
-request.method != "POST"
-latency >= 100 and latency < 500
-message ~= "timeout"
-message !~= "healthcheck"
-message like "err*"
-message ~~= "request\\s+failed"
-exists(.request.method)
-not exists(.request.user)
-level in ("warn","error","fatal")
-service not in ("metrics","health")
-.request.user? = "alice"
-(request.method = "GET" and level = "warn") or message ~= "panic"
-span.[].name = "db"
-span.[1].name = "http"
-```
-
-Supported operators:
-
-- `=`
-- `!=`
-- `>`
-- `>=`
-- `<`
-- `<=`
-- `~=`
-- `!~=`
-- `like`
-- `~~=`
-- `in (...)`
-- `not in (...)`
-- `exists(...)`
-- `not exists(...)`
-- `and`
-- `or`
-- `not`
-- parentheses
-
-Notes:
-
-- Dot paths target structured JSON fields, for example `request.method`
-- Leading-dot paths like `.field` always start from the parsed JSON object
-- `field? = value` means the field is optional: absent is treated as a match
-- Text entries can still be filtered through built-in fields like `message`
-
-## Main line templates
-
-Use `mainLineTemplate` in config to control the compact list row format.
-
-Available variables:
-
-- `timestamp`
-- `level`
-- `message`
-- `prefix`
-- `json`
-- `raw`
-
-Available helpers:
-
-- `bold`
-- `red`
-- `yellow`
-- `green`
-- `cyan`
-- `blue`
-- `purple`
-- `uppercase`
-- `fixed_size`
-- `min_size`
-- `level_style`
-
-Example:
-
-```jsonc
-{
-  "mainLineTemplate": "{{timestamp}} {{level_style (min_size level 5)}} {{prefix}}{{message}}",
-  "placeholderFormat": "#{key}",
-  "contextPath": "extra_data"
-}
-```
-
-Placeholder substitution example:
-
-If `message` is:
-
-```text
-hello #{user}
-```
-
-and `json.extra_data.user` is `alice`, the rendered message becomes:
-
-```text
-hello alice
-```
-
-If `NO_COLOR` is set, the template helpers return plain text without ANSI styling.
-
-## Scripts
-
-```bash
-bun run typecheck
-bun test
-bun run build
-bun run compile:exe
-```
-
-## File Layout
-
-- `src/main.tsx`: launch spine
-- `src/replLauncher.tsx`: shell handoff
-- `src/components/App.tsx`: providers
-- `src/screens/REPL.tsx`: TUI kernel
-- `src/QueryEngine.ts`: source/session facade
-- `src/query.ts`: view transform helpers
-- `src/lib/ingest`: sources and ring buffer
-- `src/lib/parse`: mixed JSON/text parsing
-- `src/lib/query`: interactive filter logic
-- `src/lib/config`: config loading
-
 ===== src/types.ts =====
 export type EntryKind = 'json' | 'text'
 export type NormalizedLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'unknown'
@@ -359,6 +36,12 @@ export interface LoggerConfig {
   placeholderFormat?: string
   contextPath?: string
   levelMap?: Record<string, NormalizedLevel>
+  queryMode?: {
+    debounceMs?: number
+    noHint?: boolean
+    focusGlyph?: string
+    blurGlyph?: string
+  }
 }
 
 export interface LogEntry {
@@ -409,11 +92,13 @@ export interface LoggerSnapshot {
   merged: boolean
 }
 
-export type ReplMode = 'browse' | 'filter' | 'detail-search'
+export type ReplMode = 'browse' | 'filter' | 'detail-search' | 'query'
 
 export type KeyAction =
   | 'openHelp'
   | 'openFilter'
+  | 'nextMode'
+  | 'prevMode'
   | 'toggleReverse'
   | 'levelTrace'
   | 'levelDebug'
@@ -439,94 +124,56 @@ export type KeyAction =
   | 'copyPath'
   | 'toggleAnsi'
   | 'cycleMergeSort'
+  | 'copyQuery'
+  | 'copyQueryResult'
+  | 'acceptAutocomplete'
+  | 'expandAll'
+  | 'collapseAll'
 
-===== src/entrypoints/cli.ts =====
-import { Command } from 'commander'
-import type { LoggerCliOptions } from '../types.js'
-
-export function buildProgram(): Command {
-  return new Command('logger')
-    .description('Interactive mixed JSON/text log viewer')
-    .argument('[files...]', 'Log files to open as tabs')
-    .option('--url <url>', 'Stream logs from an HTTP GET response body')
-    .option('--cmd <command>', 'Spawn a command and read stdout/stderr as log lines')
-    .option('--max <count>', 'Maximum entries to keep in memory', '50000')
-    .option('--merge', 'Merge multiple sources into a single chronological view', false)
-    .option('--merge-sort <mode>', 'Sort merged view by time or source', 'time')
-    .option('--config <path>', 'Load config from an explicit path')
-    .option('--preserve-ansi', 'Preserve ANSI in raw text detail view', false)
+export interface QueryResultItem {
+  entryId: number
+  sourceId: string
+  result: unknown
 }
 
-export function parseCli(argv: string[]): LoggerCliOptions {
-  const program = buildProgram()
-  program.parse(argv)
-  const options = program.opts<{
-    url?: string
-    cmd?: string
-    max: string
-    merge?: boolean
-    mergeSort?: 'time' | 'source'
-    config?: string
-    preserveAnsi?: boolean
-  }>()
+===== src/state/AppStateStore.ts =====
+import type { DetailViewMode, PaneFocus, ReplMode } from '../types.js'
 
-  return {
-    files: program.args as string[],
-    url: options.url,
-    cmd: options.cmd,
-    maxEntries: Number.parseInt(options.max, 10) || 50000,
-    merge: Boolean(options.merge),
-    mergeSort: options.mergeSort === 'source' ? 'source' : 'time',
-    configPath: options.config,
-    preserveAnsi: Boolean(options.preserveAnsi),
-  }
+export interface AppState {
+  cwd: string
+  statusLine: string
+  activeTabIndex: number
+  selectedIndex: number
+  paneFocus: PaneFocus
+  helpOpen: boolean
+  reverse: boolean
+  follow: boolean
+  mergeSort: 'time' | 'source'
+  replMode: ReplMode
+  queryText: string
+  queryApplyAll: boolean
+  detailViewMode: DetailViewMode
+  detailCursorIndex: number
 }
-
-===== src/QueryEngine.ts =====
-import type { LoggerCliOptions, LogEntry, LoggerSnapshot, SourceSnapshot, SourceSpec, LoggerConfig } from './types.js'
-import { createSourceSpecs } from './lib/ingest/createSources.js'
-import { RingBuffer } from './lib/ingest/ringBuffer.js'
-import { createFileSource } from './lib/ingest/fileSource.js'
-import { createStdinSource } from './lib/ingest/stdinSource.js'
-import { createUrlSource } from './lib/ingest/urlSource.js'
-import { createCommandSource } from './lib/ingest/commandSource.js'
-import { parseLine } from './lib/parse/parseLine.js'
-import type { SourceCallbacks, SourceSubscription } from './lib/ingest/sourceTypes.js'
-import { loadLoggerConfig } from './lib/config/configLoader.js'
-import { createMergedEntries } from './query.js'
 
 type Listener = () => void
 
-interface SourceState {
-  spec: SourceSpec
-  buffer: RingBuffer<LogEntry>
-  total: number
-  jsonCount: number
-  textCount: number
-}
+export class AppStateStore {
+  private state: AppState
+  private listeners = new Set<Listener>()
 
-export class LoggerSession {
-  private readonly listeners = new Set<Listener>()
-  private readonly sourceStates = new Map<string, SourceState>()
-  private readonly subscriptions: SourceSubscription[] = []
-  private readonly pending = new Map<string, LogEntry[]>()
-  private flushTimer: ReturnType<typeof setTimeout> | null = null
-  private nextEntryId = 1
-  private version = 0
+  constructor(initial: AppState) {
+    this.state = initial
+  }
 
-  constructor(
-    private readonly options: LoggerCliOptions,
-    readonly specs: SourceSpec[],
-    private readonly config: LoggerConfig,
-  ) {
-    for (const spec of specs) {
-      this.sourceStates.set(spec.id, {
-        spec,
-        buffer: new RingBuffer<LogEntry>(options.maxEntries),
-        total: 0,
-        jsonCount: 0,
-        textCount: 0,
-      })
+  getState(): AppState {
+    return this.state
+  }
+
+  setState(update: Partial<AppState> | ((current: AppState) => AppState)): void {
+    this.state = typeof update === 'function' ? update(this.state) : { ...this.state, ...update }
+    for (const listener of this.listeners) {
+      listener()
     }
   }
 
@@ -534,155 +181,24 @@ export class LoggerSession {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
-
-  getSnapshot(): LoggerSnapshot {
-    const sources: SourceSnapshot[] = this.specs.map((spec) => {
-      if (spec.id === 'merge-0') {
-        const states = this.specs
-          .filter((source) => source.id !== 'merge-0')
-          .map((source) => this.sourceStates.get(source.id))
-          .filter((state): state is SourceState => Boolean(state))
-
-        return {
-          spec,
-          total: states.reduce((sum, state) => sum + state.total, 0),
-          jsonCount: states.reduce((sum, state) => sum + state.jsonCount, 0),
-          textCount: states.reduce((sum, state) => sum + state.textCount, 0),
-        }
-      }
-
-      const state = this.sourceStates.get(spec.id)
-      return {
-        spec,
-        total: state?.total ?? 0,
-        jsonCount: state?.jsonCount ?? 0,
-        textCount: state?.textCount ?? 0,
-      }
-    })
-    return {
-      version: this.version,
-      sources,
-      config: this.config,
-      merged: this.specs.some((spec) => spec.id === 'merge-0'),
-    }
-  }
-
-  getEntries(sourceId: string, reverse: boolean, mergeSort: 'time' | 'source' = 'time'): LogEntry[] {
-    if (sourceId === 'merge-0') {
-      const grouped = this.specs
-        .filter((spec) => spec.id !== 'merge-0')
-        .map((spec) => ({
-          sourceId: spec.id,
-          entries: this.sourceStates.get(spec.id)?.buffer.toArray(false) ?? [],
-        }))
-      return createMergedEntries(grouped, reverse, mergeSort)
-    }
-    return this.sourceStates.get(sourceId)?.buffer.toArray(reverse) ?? []
-  }
-
-  async start(): Promise<void> {
-    for (const spec of this.specs) {
-      if (spec.id === 'merge-0') {
-        continue
-      }
-      const callbacks: SourceCallbacks = {
-        onLine: (line) => this.enqueueLine(spec, line),
-        onError: () => this.flush(),
-        onEnd: () => this.flush(),
-      }
-
-      const subscription =
-        spec.type === 'file'
-          ? createFileSource(spec, callbacks)
-          : spec.type === 'stdin'
-            ? createStdinSource(spec, callbacks)
-            : spec.type === 'url'
-              ? createUrlSource(spec, callbacks)
-              : createCommandSource(spec, callbacks)
-
-      this.subscriptions.push(subscription)
-    }
-  }
-
-  stop(): void {
-    for (const subscription of this.subscriptions) {
-      subscription.stop()
-    }
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer)
-      this.flushTimer = null
-    }
-  }
-
-  private enqueueLine(spec: SourceSpec, raw: string): void {
-    const parsed = parseLine(raw, this.config)
-    const entry: LogEntry = {
-      id: this.nextEntryId++,
-      sourceId: spec.id,
-      raw,
-      prefix: parsed.prefix,
-      kind: parsed.kind,
-      parsed: parsed.parsed,
-      time: parsed.time,
-      timestampMs: parsed.timestampMs,
-      level: parsed.level,
-      levelRaw: parsed.levelRaw,
-      message: parsed.message,
-    }
-
-    const pending = this.pending.get(spec.id) ?? []
-    pending.push(entry)
-    this.pending.set(spec.id, pending)
-    this.scheduleFlush()
-  }
-
-  private scheduleFlush(): void {
-    if (this.flushTimer) {
-      return
-    }
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null
-      this.flush()
-    }, 50)
-  }
-
-  private flush(): void {
-    if (this.pending.size === 0) {
-      return
-    }
-
-    for (const [sourceId, entries] of this.pending) {
-      const state = this.sourceStates.get(sourceId)
-      if (!state) {
-        continue
-      }
-
-      for (const entry of entries) {
-        state.buffer.push(entry)
-        state.total += 1
-        if (entry.kind === 'json') {
-          state.jsonCount += 1
-        } else {
-          state.textCount += 1
-        }
-      }
-    }
-
-    this.pending.clear()
-    this.version += 1
-    for (const listener of this.listeners) {
-      listener()
-    }
-  }
 }
 
-export class QueryEngine {
-  async start(options: LoggerCliOptions): Promise<LoggerSession> {
-    const specs = createSourceSpecs(options, process.stdin.isTTY ?? false)
-    const config = await loadLoggerConfig({ configPath: options.configPath })
-    const session = new LoggerSession(options, specs, config)
-    await session.start()
-    return session
+export function createInitialAppState(cwd: string): AppState {
+  return {
+    cwd,
+    statusLine: 'Waiting for logs',
+    activeTabIndex: 0,
+    selectedIndex: 0,
+    paneFocus: 'list',
+    helpOpen: false,
+    reverse: false,
+    follow: true,
+    mergeSort: 'time',
+    replMode: 'browse',
+    queryText: '',
+    queryApplyAll: false,
+    detailViewMode: 'tree',
+    detailCursorIndex: 0,
   }
 }
 
@@ -704,6 +220,12 @@ const ConfigSchema = z.object({
   placeholderFormat: z.string().optional(),
   contextPath: z.string().optional(),
   levelMap: LevelMapSchema.default({}),
+  queryMode: z.object({
+    debounceMs: z.number().optional(),
+    noHint: z.boolean().optional(),
+    focusGlyph: z.string().optional(),
+    blurGlyph: z.string().optional(),
+  }).optional(),
 })
 
 const DEFAULT_CONFIG: LoggerConfig = {
@@ -713,6 +235,12 @@ const DEFAULT_CONFIG: LoggerConfig = {
   placeholderFormat: '#{key}',
   contextPath: 'extra_data',
   levelMap: {},
+  queryMode: {
+    debounceMs: 150,
+    noHint: false,
+    focusGlyph: '>',
+    blurGlyph: '-',
+  },
 }
 
 function stripJsonComments(text: string): string {
@@ -746,606 +274,6 @@ export async function loadLoggerConfig(input: {
   return { ...DEFAULT_CONFIG, ...(homeConfig ?? {}), ...(cwdConfig ?? {}) }
 }
 
-===== src/lib/parse/normalizeLevel.ts =====
-import type { LoggerConfig, NormalizedLevel } from '../../types.js'
-
-export function normalizeLevel(value: unknown, config?: LoggerConfig): NormalizedLevel {
-  const mapped = config?.levelMap?.[String(value)]
-  if (mapped) return mapped
-  const raw = String(value ?? '').toLowerCase()
-  if (raw.includes('trace')) return 'trace'
-  if (raw.includes('debug')) return 'debug'
-  if (raw === 'warning' || raw.includes('warn')) return 'warn'
-  if (raw.includes('error')) return 'error'
-  if (raw.includes('fatal')) return 'fatal'
-  if (raw.includes('info')) return 'info'
-  return 'unknown'
-}
-
-===== src/lib/parse/parseLine.ts =====
-import type { LoggerConfig, ParsedLine } from '../../types.js'
-import { extractLevel, extractMessage, extractTime } from './heuristics.js'
-import { normalizeLevel } from './normalizeLevel.js'
-import { parsePrefixedJson } from './parsePrefixedJson.js'
-
-function parseJson(text: string): unknown | undefined {
-  try {
-    return JSON.parse(text) as unknown
-  } catch {
-    return undefined
-  }
-}
-
-export function parseLine(raw: string, config?: LoggerConfig): ParsedLine {
-  const prefixed = parsePrefixedJson(raw)
-  const candidateJson = prefixed.jsonText ?? raw.trim()
-  const parsed = parseJson(candidateJson)
-
-  if (parsed && typeof parsed === 'object' && parsed !== null) {
-    const record = parsed as Record<string, unknown>
-    const time = extractTime(record)
-    const level = extractLevel(record)
-    return {
-      prefix: prefixed.prefix,
-      kind: 'json',
-      parsed,
-      ...time,
-      ...level,
-      level: normalizeLevel(level.levelRaw, config),
-      message: extractMessage(record),
-    }
-  }
-
-  return {
-    kind: 'text',
-    prefix: prefixed.prefix,
-    level: normalizeLevel(undefined, config),
-    message: raw,
-  }
-}
-
-===== src/lib/query/filterAst.ts =====
-export type FilterValue = string | number | boolean | null
-
-export interface FieldPathStep {
-  kind: 'key' | 'index' | 'wildcard'
-  value?: string | number
-}
-
-export interface FieldRef {
-  raw: string
-  leadingDot: boolean
-  optional: boolean
-  steps: FieldPathStep[]
-}
-
-export type FilterNode =
-  | { type: 'and'; left: FilterNode; right: FilterNode }
-  | { type: 'or'; left: FilterNode; right: FilterNode }
-  | { type: 'not'; node: FilterNode }
-  | { type: 'exists'; field: FieldRef }
-  | { type: 'comparison'; field: FieldRef; operator: ComparisonOperator; value: FilterValue | FilterValue[] }
-
-export type ComparisonOperator =
-  | '='
-  | '!='
-  | '>'
-  | '>='
-  | '<'
-  | '<='
-  | '~='
-  | '!~='
-  | 'like'
-  | '~~='
-  | 'in'
-  | 'not in'
-
-===== src/lib/query/filterParser.ts =====
-import type { ComparisonOperator, FieldPathStep, FieldRef, FilterNode, FilterValue } from './filterAst.js'
-
-type Token =
-  | { type: 'identifier'; value: string }
-  | { type: 'string'; value: string }
-  | { type: 'number'; value: number }
-  | { type: 'boolean'; value: boolean }
-  | { type: 'null' }
-  | { type: 'operator'; value: string }
-  | { type: 'lparen' | 'rparen' | 'comma' | 'dot' | 'qmark' | 'lbracket' | 'rbracket' }
-
-function isIdentifierStart(char: string): boolean {
-  return /[A-Za-z_]/.test(char)
-}
-
-function isIdentifierPart(char: string): boolean {
-  return /[A-Za-z0-9_-]/.test(char)
-}
-
-export function tokenizeFilter(input: string): Token[] {
-  const tokens: Token[] = []
-  let index = 0
-
-  while (index < input.length) {
-    const char = input[index]
-    if (!char) break
-    if (/\s/.test(char)) {
-      index += 1
-      continue
-    }
-
-    if (char === '(') {
-      tokens.push({ type: 'lparen' })
-      index += 1
-      continue
-    }
-    if (char === ')') {
-      tokens.push({ type: 'rparen' })
-      index += 1
-      continue
-    }
-    if (char === ',') {
-      tokens.push({ type: 'comma' })
-      index += 1
-      continue
-    }
-    if (char === '.') {
-      tokens.push({ type: 'dot' })
-      index += 1
-      continue
-    }
-    if (char === '?') {
-      tokens.push({ type: 'qmark' })
-      index += 1
-      continue
-    }
-    if (char === '[') {
-      tokens.push({ type: 'lbracket' })
-      index += 1
-      continue
-    }
-    if (char === ']') {
-      tokens.push({ type: 'rbracket' })
-      index += 1
-      continue
-    }
-
-    const three = input.slice(index, index + 3)
-    if (['!~=', '~~='].includes(three)) {
-      tokens.push({ type: 'operator', value: three })
-      index += 3
-      continue
-    }
-    const two = input.slice(index, index + 2)
-    if (['!=', '>=', '<=', '~='].includes(two)) {
-      tokens.push({ type: 'operator', value: two })
-      index += 2
-      continue
-    }
-    if (['=', '>', '<'].includes(char)) {
-      tokens.push({ type: 'operator', value: char })
-      index += 1
-      continue
-    }
-
-    if (char === '"') {
-      let value = ''
-      index += 1
-      while (index < input.length && input[index] !== '"') {
-        const current = input[index]
-        if (current === '\\' && index + 1 < input.length) {
-          value += `\\${input[index + 1] ?? ''}`
-          index += 2
-          continue
-        }
-        value += current ?? ''
-        index += 1
-      }
-      index += 1
-      tokens.push({ type: 'string', value })
-      continue
-    }
-
-    const remainder = input.slice(index)
-    const numberMatch = remainder.match(/^-?\d+(?:\.\d+)?/)
-    if (numberMatch?.[0]) {
-      tokens.push({ type: 'number', value: Number(numberMatch[0]) })
-      index += numberMatch[0].length
-      continue
-    }
-
-    if (isIdentifierStart(char)) {
-      let value = char
-      index += 1
-      while (index < input.length && isIdentifierPart(input[index] ?? '')) {
-        value += input[index]
-        index += 1
-      }
-      if (value === 'true' || value === 'false') {
-        tokens.push({ type: 'boolean', value: value === 'true' })
-      } else if (value === 'null') {
-        tokens.push({ type: 'null' })
-      } else {
-        tokens.push({ type: 'identifier', value })
-      }
-      continue
-    }
-
-    throw new Error(`Unexpected token near: ${remainder}`)
-  }
-
-  return tokens
-}
-
-class Parser {
-  private index = 0
-
-  constructor(private readonly tokens: Token[]) {}
-
-  parse(): FilterNode {
-    const node = this.parseOr()
-    if (this.peek()) {
-      throw new Error('Unexpected trailing tokens in filter')
-    }
-    return node
-  }
-
-  private parseOr(): FilterNode {
-    let node = this.parseAnd()
-    while (this.isIdentifier('or')) {
-      this.consume()
-      node = { type: 'or', left: node, right: this.parseAnd() }
-    }
-    return node
-  }
-
-  private parseAnd(): FilterNode {
-    let node = this.parseNot()
-    while (this.isIdentifier('and')) {
-      this.consume()
-      node = { type: 'and', left: node, right: this.parseNot() }
-    }
-    return node
-  }
-
-  private parseNot(): FilterNode {
-    if (this.isIdentifier('not')) {
-      this.consume()
-      return { type: 'not', node: this.parseNot() }
-    }
-    return this.parsePrimary()
-  }
-
-  private parsePrimary(): FilterNode {
-    if (this.peek()?.type === 'lparen') {
-      this.consume()
-      const node = this.parseOr()
-      this.expect('rparen')
-      return node
-    }
-
-    if (this.isIdentifier('exists')) {
-      this.consume()
-      this.expect('lparen')
-      const field = this.parseFieldRef()
-      this.expect('rparen')
-      return { type: 'exists', field }
-    }
-
-    return this.parseComparison()
-  }
-
-  private parseComparison(): FilterNode {
-    const field = this.parseFieldRef()
-
-    if (this.isIdentifier('not') && this.peek(1)?.type === 'identifier' && (this.peek(1) as Token & { value: string }).value === 'in') {
-      this.consume()
-      this.consume()
-      return {
-        type: 'comparison',
-        field,
-        operator: 'not in',
-        value: this.parseList(),
-      }
-    }
-
-    if (this.isIdentifier('in')) {
-      this.consume()
-      return {
-        type: 'comparison',
-        field,
-        operator: 'in',
-        value: this.parseList(),
-      }
-    }
-
-    const operatorToken = this.consume()
-    if (!operatorToken || operatorToken.type !== 'operator' && !(operatorToken.type === 'identifier' && operatorToken.value === 'like')) {
-      throw new Error('Expected comparison operator')
-    }
-
-    const operator = (operatorToken.type === 'operator' ? operatorToken.value : operatorToken.value) as ComparisonOperator
-    const value = this.parseValue()
-    return { type: 'comparison', field, operator, value }
-  }
-
-  private parseList(): FilterValue[] {
-    this.expect('lparen')
-    const values: FilterValue[] = []
-    while (this.peek() && this.peek()?.type !== 'rparen') {
-      values.push(this.parseValue())
-      if (this.peek()?.type === 'comma') {
-        this.consume()
-      } else {
-        break
-      }
-    }
-    this.expect('rparen')
-    return values
-  }
-
-  private parseFieldRef(): FieldRef {
-    const steps: FieldPathStep[] = []
-    let leadingDot = false
-    let optional = false
-
-    if (this.peek()?.type === 'dot') {
-      leadingDot = true
-      this.consume()
-    }
-
-    while (true) {
-      const token = this.peek()
-      if (!token) break
-
-      if (token.type === 'identifier') {
-        steps.push({ kind: 'key', value: token.value })
-        this.consume()
-      } else if (token.type === 'lbracket') {
-        this.consume()
-        if (this.peek()?.type === 'rbracket') {
-          this.consume()
-          steps.push({ kind: 'wildcard' })
-        } else {
-          const indexToken = this.consume()
-          if (!indexToken || indexToken.type !== 'number') {
-            throw new Error('Expected array index')
-          }
-          this.expect('rbracket')
-          steps.push({ kind: 'index', value: indexToken.value })
-        }
-      } else {
-        break
-      }
-
-      if (this.peek()?.type === 'dot') {
-        this.consume()
-        continue
-      }
-
-      if (this.peek()?.type === 'qmark') {
-        optional = true
-        this.consume()
-      }
-      break
-    }
-
-    if (steps.length === 0) {
-      throw new Error('Expected field path')
-    }
-
-    const raw = steps
-      .map((step) => {
-        if (step.kind === 'key') return String(step.value)
-        if (step.kind === 'wildcard') return '[]'
-        return `[${step.value}]`
-      })
-      .join('.')
-
-    return { raw, leadingDot, optional, steps }
-  }
-
-  private parseValue(): FilterValue {
-    const token = this.consume()
-    if (!token) {
-      throw new Error('Expected value')
-    }
-    if (token.type === 'string' || token.type === 'number' || token.type === 'boolean') {
-      return token.value
-    }
-    if (token.type === 'null') {
-      return null
-    }
-    if (token.type === 'identifier') {
-      return token.value
-    }
-    throw new Error('Invalid value')
-  }
-
-  private isIdentifier(value: string): boolean {
-    const token = this.peek()
-    return Boolean(token && token.type === 'identifier' && token.value === value)
-  }
-
-  private expect(type: Token['type']): void {
-    const token = this.consume()
-    if (!token || token.type !== type) {
-      throw new Error(`Expected ${type}`)
-    }
-  }
-
-  private peek(offset = 0): Token | undefined {
-    return this.tokens[this.index + offset]
-  }
-
-  private consume(): Token | undefined {
-    const token = this.tokens[this.index]
-    if (token) this.index += 1
-    return token
-  }
-}
-
-export function parseFilterAst(input: string): FilterNode | null {
-  const trimmed = input.trim()
-  if (!trimmed) return null
-  const parser = new Parser(tokenizeFilter(trimmed))
-  return parser.parse()
-}
-
-===== src/lib/query/filterEval.ts =====
-import type { LogEntry } from '../../types.js'
-import type { ComparisonOperator, FieldPathStep, FieldRef, FilterNode, FilterValue } from './filterAst.js'
-
-function toBuiltinContext(entry: LogEntry): Record<string, unknown> {
-  return {
-    source: entry.sourceId,
-    kind: entry.kind,
-    level: entry.levelRaw ?? entry.level,
-    message: entry.message,
-    prefix: entry.prefix,
-    raw: entry.raw,
-    time: entry.time,
-    timestamp: entry.timestampMs,
-  }
-}
-
-function resolvePath(root: unknown, steps: FieldPathStep[]): unknown[] {
-  let current: unknown[] = [root]
-
-  for (const step of steps) {
-    const next: unknown[] = []
-    for (const value of current) {
-      if (step.kind === 'key') {
-        if (value && typeof value === 'object' && step.value && step.value in (value as Record<string, unknown>)) {
-          next.push((value as Record<string, unknown>)[String(step.value)])
-        }
-      } else if (step.kind === 'index') {
-        if (Array.isArray(value) && typeof step.value === 'number') {
-          next.push(value[step.value])
-        }
-      } else if (step.kind === 'wildcard') {
-        if (Array.isArray(value)) {
-          next.push(...value)
-        }
-      }
-    }
-    current = next.filter((value) => value !== undefined)
-  }
-
-  return current
-}
-
-export function getFieldValues(entry: LogEntry, field: FieldRef): unknown[] {
-  const builtins = toBuiltinContext(entry)
-  if (!field.leadingDot && field.steps.length === 1 && field.steps[0]?.kind === 'key') {
-    const key = String(field.steps[0].value)
-    if (key in builtins) {
-      return [builtins[key]]
-    }
-  }
-
-  const roots: unknown[] = []
-  if (!field.leadingDot) {
-    roots.push(builtins)
-  }
-  roots.push(entry.parsed)
-
-  const values: unknown[] = []
-  for (const root of roots) {
-    values.push(...resolvePath(root, field.steps))
-  }
-  return values
-}
-
-function wildcardToRegExp(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
-  return new RegExp(`^${escaped}$`, 'i')
-}
-
-function compareSingle(value: unknown, operator: ComparisonOperator, needle: FilterValue | FilterValue[]): boolean {
-  if (operator === 'in' || operator === 'not in') {
-    const values = needle as FilterValue[]
-    const matched = values.some((candidate) => String(value).toLowerCase() === String(candidate).toLowerCase())
-    return operator === 'in' ? matched : !matched
-  }
-
-  if (operator === '=' || operator === '!=') {
-    const matched = String(value).toLowerCase() === String(needle).toLowerCase()
-    return operator === '=' ? matched : !matched
-  }
-
-  if (operator === '~=' || operator === '!~=') {
-    const matched = String(value).toLowerCase().includes(String(needle).toLowerCase())
-    return operator === '~=' ? matched : !matched
-  }
-
-  if (operator === 'like') {
-    return wildcardToRegExp(String(needle)).test(String(value))
-  }
-
-  if (operator === '~~=') {
-    return new RegExp(String(needle)).test(String(value))
-  }
-
-  const left = Number(value)
-  const right = Number(needle)
-  if (Number.isNaN(left) || Number.isNaN(right)) {
-    return false
-  }
-  switch (operator) {
-    case '>':
-      return left > right
-    case '>=':
-      return left >= right
-    case '<':
-      return left < right
-    case '<=':
-      return left <= right
-    default:
-      return false
-  }
-}
-
-function evaluateComparison(entry: LogEntry, field: FieldRef, operator: ComparisonOperator, value: FilterValue | FilterValue[]): boolean {
-  const values = getFieldValues(entry, field)
-  if (values.length === 0) {
-    return field.optional
-  }
-
-  if (operator === '!=' || operator === '!~=' || operator === 'not in') {
-    return values.every((item) => compareSingle(item, operator, value))
-  }
-
-  return values.some((item) => compareSingle(item, operator, value))
-}
-
-export function evaluateFilterNode(entry: LogEntry, node: FilterNode): boolean {
-  switch (node.type) {
-    case 'and':
-      return evaluateFilterNode(entry, node.left) && evaluateFilterNode(entry, node.right)
-    case 'or':
-      return evaluateFilterNode(entry, node.left) || evaluateFilterNode(entry, node.right)
-    case 'not':
-      return !evaluateFilterNode(entry, node.node)
-    case 'exists':
-      return getFieldValues(entry, node.field).length > 0
-    case 'comparison':
-      return evaluateComparison(entry, node.field, node.operator, node.value)
-  }
-}
-
-===== src/lib/query/filter.ts =====
-import type { LogEntry } from '../../types.js'
-import type { FilterNode } from './filterAst.js'
-import { evaluateFilterNode } from './filterEval.js'
-import { parseFilterAst } from './filterParser.js'
-
-export function parseQuery(input: string): FilterNode | null {
-  return parseFilterAst(input)
-}
-
-export function matchesQuery(entry: LogEntry, node: FilterNode | null): boolean {
-  return node ? evaluateFilterNode(entry, node) : true
-}
-
 ===== src/lib/query/keybindings.ts =====
 import type { KeyAction, LoggerConfig } from '../../types.js'
 
@@ -1356,6 +284,7 @@ export interface KeyLike {
   pageDown?: boolean
   tab?: boolean
   shift?: boolean
+  ctrl?: boolean
   return?: boolean
   escape?: boolean
 }
@@ -1363,6 +292,8 @@ export interface KeyLike {
 const DEFAULT_BINDINGS: Record<KeyAction, string[]> = {
   openHelp: ['f1', '?'],
   openFilter: ['F', '/'],
+  nextMode: ['shift+down'],
+  prevMode: ['shift+up'],
   toggleReverse: ['R'],
   levelTrace: ['1'],
   levelDebug: ['2'],
@@ -1388,18 +319,26 @@ const DEFAULT_BINDINGS: Record<KeyAction, string[]> = {
   copyPath: ['p'],
   toggleAnsi: ['a'],
   cycleMergeSort: ['M'],
+  copyQuery: ['ctrl+q'],
+  copyQueryResult: ['ctrl+o'],
+  acceptAutocomplete: ['tab'],
+  expandAll: ['ctrl+p'],
+  collapseAll: ['ctrl+n'],
 }
 
 function normalizeInput(input: string, key: KeyLike): string[] {
   const values: string[] = []
   if (key.upArrow) values.push('up')
   if (key.downArrow) values.push('down')
+  if (key.upArrow && key.shift) values.push('shift+up')
+  if (key.downArrow && key.shift) values.push('shift+down')
   if (key.pageUp) values.push('pageup')
   if (key.pageDown) values.push('pagedown')
   if (key.return) values.push('enter')
   if (key.escape) values.push('escape')
   if (key.tab && key.shift) values.push('shift+tab')
   else if (key.tab) values.push('tab')
+  if (key.ctrl && input) values.push(`ctrl+${input}`)
   if (input === ' ') values.push('space')
   if (input) values.push(input)
   return values
@@ -1416,181 +355,176 @@ export function matchesBinding(
   return normalized.some((value) => activeBindings.includes(value))
 }
 
-===== src/lib/format/mainLineTemplate.ts =====
-import Handlebars from 'handlebars'
-import type { LogEntry, LoggerConfig } from '../../types.js'
+===== src/hooks/useDebouncedValue.ts =====
+import { useEffect, useState } from 'react'
 
-const DEFAULT_TEMPLATE = '{{timestamp}} {{level}} {{prefix}}{{message}}'
-const cache = new Map<string, HandlebarsTemplateDelegate>()
+export function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value)
 
-function useColor(): boolean {
-  return !process.env.NO_COLOR
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebounced(value)
+    }, delayMs)
+    return () => clearTimeout(timer)
+  }, [value, delayMs])
+
+  return debounced
 }
 
-function applyAnsi(code: string, value: string): string {
-  if (!useColor()) return value
-  return `${code}${value}\u001B[0m`
-}
+===== src/lib/queryMode/evaluateQuery.ts =====
+import { spawnSync } from 'node:child_process'
 
-function getInstance(): typeof Handlebars {
-  const instance = Handlebars.create()
-  instance.registerHelper('bold', (value: string) => applyAnsi('\u001B[1m', String(value)))
-  instance.registerHelper('red', (value: string) => applyAnsi('\u001B[31m', String(value)))
-  instance.registerHelper('yellow', (value: string) => applyAnsi('\u001B[33m', String(value)))
-  instance.registerHelper('green', (value: string) => applyAnsi('\u001B[32m', String(value)))
-  instance.registerHelper('cyan', (value: string) => applyAnsi('\u001B[36m', String(value)))
-  instance.registerHelper('blue', (value: string) => applyAnsi('\u001B[34m', String(value)))
-  instance.registerHelper('purple', (value: string) => applyAnsi('\u001B[35m', String(value)))
-  instance.registerHelper('uppercase', (value: string) => String(value).toUpperCase())
-  instance.registerHelper('fixed_size', (value: string, size: number) => String(value).padEnd(Number(size)).slice(0, Number(size)))
-  instance.registerHelper('min_size', (value: string, size: number) => String(value).padEnd(Number(size)))
-  instance.registerHelper('level_style', (value: string) => {
-    const level = String(value).toLowerCase()
-    if (level.includes('error') || level.includes('fatal')) return applyAnsi('\u001B[31m', String(value))
-    if (level.includes('warn')) return applyAnsi('\u001B[33m', String(value))
-    if (level.includes('info')) return applyAnsi('\u001B[32m', String(value))
-    if (level.includes('debug')) return applyAnsi('\u001B[34m', String(value))
-    return String(value)
-  })
-  return instance
-}
+let jqAvailable: boolean | undefined
 
-function getTemplate(source: string): HandlebarsTemplateDelegate {
-  const existing = cache.get(source)
-  if (existing) return existing
-  const compiled = getInstance().compile(source)
-  cache.set(source, compiled)
-  return compiled
-}
-
-function substitutePlaceholders(entry: LogEntry, config: LoggerConfig): string {
-  const format = config.placeholderFormat
-  const contextPath = config.contextPath
-  if (!format || !contextPath || typeof entry.parsed !== 'object' || !entry.parsed) {
-    return entry.message
+function hasJq(): boolean {
+  if (jqAvailable !== undefined) {
+    return jqAvailable
   }
-
-  const [prefix, suffix] = format.split('key')
-  if (prefix === undefined || suffix === undefined) {
-    return entry.message
-  }
-
-  const context = (entry.parsed as Record<string, unknown>)[contextPath]
-  if (!context || typeof context !== 'object') {
-    return entry.message
-  }
-
-  return entry.message.replace(new RegExp(`${escapeRegExp(prefix)}([^${escapeRegExp(suffix)}]+)${escapeRegExp(suffix)}`, 'g'), (_match, key) => {
-    const value = (context as Record<string, unknown>)[key]
-    return value === undefined ? `${prefix}${key}${suffix}` : String(value)
-  })
+  const result = spawnSync('jq', ['--version'], { stdio: 'ignore' })
+  jqAvailable = result.status === 0
+  return jqAvailable
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-export function renderMainLine(entry: LogEntry, config: LoggerConfig): string {
-  const template = config.mainLineTemplate ?? DEFAULT_TEMPLATE
-  const compiled = getTemplate(template)
-  return compiled({
-    timestamp: entry.time ?? '--:--:--',
-    level: entry.levelRaw ?? entry.level,
-    message: substitutePlaceholders(entry, config),
-    prefix: entry.prefix ? `${entry.prefix} ` : '',
-    json: entry.parsed,
-    raw: entry.raw,
-  })
-}
-
-===== src/components/LogListRow.tsx =====
-import React from 'react'
-import { Text } from 'ink'
-import type { LogEntry, LoggerColumn, LoggerConfig } from '../types.js'
-import { renderMainLine } from '../lib/format/mainLineTemplate.js'
-import { splitHighlightedText } from '../lib/query/highlight.js'
-import { getJsonPathValue } from '../lib/query/jsonPath.js'
-import { formatSourceLabel } from '../lib/query/sourceLabel.js'
-
-function colorForLevel(level: LogEntry['level']): string {
-  switch (level) {
-    case 'trace':
-      return 'gray'
-    case 'debug':
-      return 'blue'
-    case 'info':
-      return 'green'
-    case 'warn':
-      return 'yellow'
-    case 'error':
-    case 'fatal':
-      return 'red'
-    default:
-      return 'white'
-  }
-}
-
-function compactTime(entry: LogEntry): string {
-  if (!entry.time) {
-    return '--:--:--'
-  }
-  const date = new Date(entry.time)
-  if (Number.isNaN(date.getTime())) {
-    return entry.time.slice(0, 8)
-  }
-  return date.toISOString().slice(11, 19)
-}
-
-export function LogListRow(props: {
-  entry: LogEntry
-  selected: boolean
-  width: number
-  columns?: LoggerColumn[]
-  config: LoggerConfig
-  mergedMode?: boolean
-  sourceLabel?: string
-  searchText?: string
-}): React.ReactElement {
-  const prefix = props.entry.prefix ? `${props.entry.prefix} ` : ''
-  const labeledMessage = formatSourceLabel(
-    Boolean(props.mergedMode),
-    props.sourceLabel ?? props.entry.sourceId,
-    `${prefix}${props.entry.message}`,
-  )
-  const columnText = (props.columns ?? [])
-    .map((column) => {
-      const value = getJsonPathValue(props.entry.parsed, column.path)
-      return value === undefined ? '' : `${column.key}=${String(value)}`
-    })
+function evaluatePath(value: unknown, query: string): unknown {
+  if (query === '.') return value
+  const trimmed = query.replace(/^\./, '')
+  const tokens = trimmed
+    .replace(/\[(\d+)\]/g, '.$1')
+    .split('.')
     .filter(Boolean)
-    .join(' ')
 
-  const rendered = renderMainLine(
-    {
-      ...props.entry,
-      message: labeledMessage,
-    },
-    props.config,
-  )
-  const rawText = `${compactTime(props.entry)} ${rendered}${columnText ? ` ${columnText}` : ''}`
-  const text = rawText.length > props.width ? `${rawText.slice(0, Math.max(0, props.width - 3))}...` : rawText
+  let current: unknown = value
+  for (const token of tokens) {
+    if (Array.isArray(current)) {
+      const index = Number.parseInt(token, 10)
+      current = Number.isNaN(index) ? undefined : current[index]
+      continue
+    }
+    if (!current || typeof current !== 'object') {
+      return undefined
+    }
+    current = (current as Record<string, unknown>)[token]
+  }
+  return current
+}
+
+export function evaluateQuery(value: unknown, query: string): unknown {
+  const trimmed = query.trim()
+  if (!trimmed) return value
+
+  if (hasJq()) {
+    const result = spawnSync('jq', ['-c', trimmed], {
+      input: JSON.stringify(value),
+      encoding: 'utf8',
+    })
+    if (result.status === 0) {
+      const stdout = result.stdout.trim()
+      if (!stdout) return null
+      try {
+        return JSON.parse(stdout)
+      } catch {
+        return stdout
+      }
+    }
+  }
+
+  if (trimmed === '.') return value
+  if (/^\.[A-Za-z0-9_.\[\]]+$/.test(trimmed)) {
+    return evaluatePath(value, trimmed)
+  }
+
+  return `Unsupported query without jq: ${trimmed}`
+}
+
+===== src/lib/queryMode/autocomplete.ts =====
+function walk(value: unknown, prefix = '$'): string[] {
+  if (!value || typeof value !== 'object') {
+    return []
+  }
+
+  if (Array.isArray(value)) {
+    const paths: string[] = []
+    value.forEach((item, index) => {
+      const childPath = `${prefix}[${index}]`
+      paths.push(childPath)
+      paths.push(...walk(item, childPath))
+    })
+    return paths
+  }
+
+  const paths: string[] = []
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const childPath = `${prefix}.${key}`
+    paths.push(childPath)
+    paths.push(...walk(child, childPath))
+  }
+  return paths
+}
+
+export function getQueryAutocompleteSuggestion(input: string, value: unknown): string | null {
+  const trimmed = input.trim()
+  if (!trimmed.startsWith('.')) return null
+
+  const paths = walk(value).map((path) => path.replace(/^\$/, ''))
+  return paths.find((path) => path.startsWith(trimmed)) ?? null
+}
+
+===== src/components/QueryBar.tsx =====
+import React from 'react'
+import { Box, Text } from 'ink'
+import TextInput from 'ink-text-input'
+
+export function QueryBar(props: {
+  value: string
+  suggestion?: string | null
+  focusGlyph: string
+  blurGlyph: string
+  onChange(value: string): void
+  onSubmit(value: string): void
+}): React.ReactElement {
+  const suffix = props.suggestion && props.suggestion.startsWith(props.value)
+    ? props.suggestion.slice(props.value.length)
+    : ''
 
   return (
-    <Text
-      color={props.selected ? 'black' : colorForLevel(props.entry.level)}
-      backgroundColor={props.selected ? 'white' : undefined}
-    >
-      {props.selected ? '>' : ' '}
-      {splitHighlightedText(text, props.searchText ?? '').segments.map((segment, index) => (
-        <Text
-          key={`${props.entry.id}-${index}`}
-          color={props.selected ? 'black' : segment.highlighted ? 'yellow' : colorForLevel(props.entry.level)}
-          backgroundColor={props.selected ? 'white' : undefined}
-        >
-          {segment.text}
-        </Text>
-      ))}
-    </Text>
+    <Box borderStyle="round" paddingX={1}>
+      <Text color="green">{props.focusGlyph} </Text>
+      <TextInput value={props.value} onChange={props.onChange} onSubmit={props.onSubmit} />
+      {suffix ? <Text color="gray">{suffix}</Text> : <Text color="gray">{props.blurGlyph}</Text>}
+    </Box>
+  )
+}
+
+===== src/components/QueryResultView.tsx =====
+import React from 'react'
+import { Box, Text } from 'ink'
+import { JsonTree } from './JsonTree.js'
+import { RawTextView } from './RawTextView.js'
+import type { QueryResultItem } from '../types.js'
+
+export function QueryResultView(props: {
+  items: QueryResultItem[]
+  selectedIndex: number
+  foldState: Set<string>
+  selectedTreeIndex: number
+}): React.ReactElement {
+  const selected = props.items[props.selectedIndex]
+
+  return (
+    <Box flexDirection="column">
+      <Text color="green">{props.items.length > 1 ? `results: ${props.items.length}` : 'result'}</Text>
+      {!selected ? (
+        <Text color="gray">No query result</Text>
+      ) : selected.result && typeof selected.result === 'object' ? (
+        <JsonTree
+          value={selected.result}
+          foldState={props.foldState}
+          selectedIndex={props.selectedTreeIndex}
+        />
+      ) : (
+        <RawTextView text={String(selected.result)} />
+      )}
+    </Box>
   )
 }
 
@@ -1604,19 +538,24 @@ import { FilterBar } from '../components/FilterBar.js'
 import { HelpModal } from '../components/HelpModal.js'
 import { JsonTree } from '../components/JsonTree.js'
 import { LogListRow } from '../components/LogListRow.js'
+import { QueryBar } from '../components/QueryBar.js'
+import { QueryResultView } from '../components/QueryResultView.js'
 import { RawTextView } from '../components/RawTextView.js'
 import { SearchBar } from '../components/SearchBar.js'
 import { StatusLine } from '../components/StatusLine.js'
 import { VirtualSelectableList } from '../components/VirtualSelectableList.js'
 import { useAppState, useAppStateStore } from '../state/AppState.js'
 import { useTerminalSize } from '../hooks/useTerminalSize.js'
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js'
 import { QueryEngine, type LoggerSession } from '../QueryEngine.js'
 import { clampIndex, getBottomIndex, shouldFollowSelection } from '../query.js'
 import { findJsonTreeMatch, findJsonTreeMatchWrapped, findTextMatchWrapped, getJsonTreeCopyValue } from '../lib/query/detailTools.js'
 import { matchesQuery, parseQuery } from '../lib/query/filter.js'
 import { splitHighlightedText } from '../lib/query/highlight.js'
 import { matchesBinding } from '../lib/query/keybindings.js'
-import type { JsonTreeLine, LoggerCliOptions, LogEntry } from '../types.js'
+import { getQueryAutocompleteSuggestion } from '../lib/queryMode/autocomplete.js'
+import { evaluateQuery } from '../lib/queryMode/evaluateQuery.js'
+import type { JsonTreeLine, LoggerCliOptions, LogEntry, QueryResultItem } from '../types.js'
 
 function flattenJson(value: unknown, foldState: Set<string>, path = '$', depth = 0, key?: string): JsonTreeLine[] {
   const isObject = value !== null && typeof value === 'object'
@@ -1687,6 +626,12 @@ export function REPL(props: {
   const [lastDetailSearch, setLastDetailSearch] = useState('')
   const [preserveAnsi, setPreserveAnsi] = useState(props.options.preserveAnsi)
   const [levelFilter, setLevelFilter] = useState<Set<string>>(new Set())
+  const [queryModeText, setQueryModeText] = useState('.')
+  const [queryApplyAll, setQueryApplyAll] = useState(false)
+  const [queryResults, setQueryResults] = useState<QueryResultItem[]>([])
+  const [queryFoldState, setQueryFoldState] = useState<Set<string>>(new Set())
+  const [queryResultIndex, setQueryResultIndex] = useState(0)
+  const [queryResultTreeIndex, setQueryResultTreeIndex] = useState(0)
   const sessionRef = React.useRef<LoggerSession | null>(null)
 
   useEffect(() => {
@@ -1716,6 +661,8 @@ export function REPL(props: {
   const activeSource = snapshot.sources[activeTabIndex]
   const columns = snapshot.config?.columns ?? []
   const mergedMode = Boolean(snapshot.merged && activeSource?.spec.id === 'merge-0')
+  const queryModeConfig = snapshot.config.queryMode ?? {}
+  const debouncedQuery = useDebouncedValue(queryModeText, queryModeConfig.debounceMs ?? 150)
   const allEntries = useMemo(
     () => (activeSource ? session?.getEntries(activeSource.spec.id, reverse, mergeSort) ?? [] : []),
     [session, activeSource?.spec.id, reverse, mergeSort, version],
@@ -1748,6 +695,10 @@ export function REPL(props: {
   const treeLines = useMemo(
     () => (selectedEntry?.kind === 'json' ? flattenJson(selectedEntry.parsed, foldState) : []),
     [selectedEntry, foldState],
+  )
+  const querySuggestion = useMemo(
+    () => getQueryAutocompleteSuggestion(queryModeText, selectedEntry?.parsed),
+    [queryModeText, selectedEntry?.parsed],
   )
   const detailMatchCount = useMemo(() => {
     if (!detailSearchText) {
@@ -1784,6 +735,26 @@ export function REPL(props: {
     return detailMatchCount > 0 ? 1 : 0
   }, [detailSearchText, selectedEntry, treeLines, detailCursorIndex, detailMatchCount])
 
+  useEffect(() => {
+    if (replMode !== 'query') return
+
+    const targets = queryApplyAll
+      ? activeEntries.filter((entry) => entry.kind === 'json')
+      : selectedEntry?.kind === 'json'
+        ? [selectedEntry]
+        : []
+
+    const results = targets.map<QueryResultItem>((entry) => ({
+      entryId: entry.id,
+      sourceId: entry.sourceId,
+      result: evaluateQuery(entry.parsed, debouncedQuery),
+    }))
+
+    setQueryResults(results)
+    setQueryResultIndex(0)
+    setQueryResultTreeIndex(0)
+  }, [replMode, debouncedQuery, queryApplyAll, activeEntries, selectedEntry])
+
   function moveSelection(delta: number) {
     store.setState((current) => {
       const nextIndex = clampIndex(current.selectedIndex + delta, activeEntries.length)
@@ -1808,6 +779,15 @@ export function REPL(props: {
     const extendedKey = key as typeof key & { f1?: boolean; home?: boolean; end?: boolean }
     const config = snapshot.config
 
+    if (matchesBinding('nextMode', input, extendedKey, config)) {
+      store.setState({ replMode: replMode === 'browse' ? 'query' : 'browse' })
+      return
+    }
+    if (matchesBinding('prevMode', input, extendedKey, config)) {
+      store.setState({ replMode: replMode === 'query' ? 'browse' : 'query' })
+      return
+    }
+
     if (helpOpen) {
       if (key.escape || input === 'q' || matchesBinding('openHelp', input, extendedKey, config)) {
         store.setState({ helpOpen: false })
@@ -1825,6 +805,73 @@ export function REPL(props: {
     if (replMode === 'detail-search') {
       if (key.escape) {
         store.setState({ replMode: 'browse' })
+      }
+      return
+    }
+
+    if (replMode === 'query') {
+      if (key.escape) {
+        store.setState({ replMode: 'browse' })
+        return
+      }
+      if (matchesBinding('copyQuery', input, extendedKey, config)) {
+        void clipboard.write(queryModeText)
+        store.setState({ statusLine: `Copied query: ${queryModeText}` })
+        return
+      }
+      if (matchesBinding('copyQueryResult', input, extendedKey, config)) {
+        const result = queryResults[queryResultIndex]
+        if (result) {
+          const text = typeof result.result === 'string' ? result.result : JSON.stringify(result.result, null, 2)
+          void clipboard.write(text)
+          store.setState({ statusLine: 'Copied query result' })
+        }
+        return
+      }
+      if (matchesBinding('acceptAutocomplete', input, extendedKey, config) && querySuggestion) {
+        setQueryModeText(querySuggestion)
+        return
+      }
+      if (input === 'A') {
+        setQueryApplyAll((current) => !current)
+        return
+      }
+      if (key.return) {
+        const selected = queryResults[queryResultIndex]
+        if (selected && selected.result && typeof selected.result === 'object') {
+          const line = flattenJson(selected.result, queryFoldState)[queryResultTreeIndex]
+          if (line?.collapsible) {
+            setQueryFoldState((current) => {
+              const next = new Set(current)
+              if (next.has(line.id)) next.delete(line.id)
+              else next.add(line.id)
+              return next
+            })
+          }
+        }
+        return
+      }
+      if (matchesBinding('expandAll', input, extendedKey, config)) {
+        setQueryFoldState(new Set())
+        return
+      }
+      if (matchesBinding('collapseAll', input, extendedKey, config)) {
+        const selected = queryResults[queryResultIndex]
+        if (selected && selected.result && typeof selected.result === 'object') {
+          const allIds = flattenJson(selected.result, new Set())
+            .filter((line) => line.collapsible)
+            .map((line) => line.id)
+          setQueryFoldState(new Set(allIds))
+        }
+        return
+      }
+      if (matchesBinding('moveUp', input, extendedKey, config)) {
+        setQueryResultIndex((current) => clampIndex(current - 1, queryResults.length))
+        return
+      }
+      if (matchesBinding('moveDown', input, extendedKey, config)) {
+        setQueryResultIndex((current) => clampIndex(current + 1, queryResults.length))
+        return
       }
       return
     }
@@ -2060,6 +1107,31 @@ export function REPL(props: {
         mergedMode={mergedMode}
         mergeSort={mergeSort}
       />
+      {replMode === 'query' ? (
+        <>
+          <QueryBar
+            value={queryModeText}
+            suggestion={querySuggestion}
+            focusGlyph={queryModeConfig.focusGlyph ?? '>'}
+            blurGlyph={queryModeConfig.blurGlyph ?? '-'}
+            onChange={setQueryModeText}
+            onSubmit={() => {
+              // Debounced evaluation runs via state effect.
+            }}
+          />
+          {!queryModeConfig.noHint ? (
+            <Text color="gray">
+              Query Mode: Ctrl+Q copy query, Ctrl+O copy result, Tab accept suggestion, A toggle apply-all.
+            </Text>
+          ) : null}
+          <QueryResultView
+            items={queryResults}
+            selectedIndex={queryResultIndex}
+            foldState={queryFoldState}
+            selectedTreeIndex={queryResultTreeIndex}
+          />
+        </>
+      ) : null}
       {replMode === 'filter' ? (
         <FilterBar
           value={queryText}
@@ -2098,7 +1170,8 @@ export function REPL(props: {
         />
       ) : null}
       {helpOpen ? <HelpModal /> : null}
-      <Box flexDirection="row">
+      {replMode !== 'query' ? (
+        <Box flexDirection="row">
         <Box flexDirection="column" width={listWidth}>
           <VirtualSelectableList
             items={activeEntries}
@@ -2133,7 +1206,8 @@ export function REPL(props: {
             <RawTextView text={selectedEntry.raw} searchText={detailSearchText} preserveAnsi={preserveAnsi} />
           )}
         </Box>
-      </Box>
+        </Box>
+      ) : null}
       <Footer
         follow={follow}
         paneFocus={paneFocus}
@@ -2145,100 +1219,339 @@ export function REPL(props: {
   )
 }
 
-===== tests/query-filter.test.ts =====
-import test from 'node:test'
-import assert from 'node:assert/strict'
-import { parseQuery, matchesQuery } from '../src/lib/query/filter.js'
-import type { LogEntry } from '../src/types.js'
+===== README.md =====
+# logger
 
-const jsonEntry: LogEntry = {
-  id: 1,
-  sourceId: 'api',
-  raw: '{"request":{"method":"GET"},"span":[{"name":"db"},{"name":"http"}],"latency":42,"level":"warn","message":"request failed","extra_data":{"user":"alice"}}',
-  kind: 'json',
-  parsed: {
-    request: { method: 'GET' },
-    span: [{ name: 'db' }, { name: 'http' }],
-    latency: 42,
-    level: 'warn',
-    message: 'request failed',
-    extra_data: { user: 'alice' },
-  },
-  level: 'warn',
-  levelRaw: 'warn',
-  message: 'request failed',
+`logger` is a Bun-first TUI for browsing mixed server log streams.
+
+It is optimized for:
+
+- JSONL most of the time
+- plain text sometimes
+- files, stdin, HTTP streams, or spawned commands
+- a compact virtualized list on the left
+- a JSON tree or raw text details view on the right
+
+## Usage
+
+```bash
+bun install
+bun run dev -- examples/mixed.log
+```
+
+## Quick Start
+
+From the repo root:
+
+```bash
+cd /usr/local/personal/logger-cli
+bun install
+bun run dev -- examples/mixed.log
+```
+
+That starts the interactive TUI immediately.
+
+Open multiple files as tabs:
+
+```bash
+bun run dev -- access.log app.log
+```
+
+Read from stdin:
+
+```bash
+cat examples/mixed.log | bun run dev --
+```
+
+Stream from a URL:
+
+```bash
+bun run dev -- --url https://example.com/logs
+```
+
+Stream from a command:
+
+```bash
+bun run dev -- --cmd "docker logs -f my-container 2>&1"
+```
+
+Load config from an explicit path:
+
+```bash
+bun run dev -- --config ./logger.jsonc examples/mixed.log
+```
+
+Merge multiple live sources:
+
+```bash
+bun run dev -- --merge --merge-sort time app.log --url https://example.com/logs --cmd "docker logs -f app 2>&1"
+```
+
+Use config-driven columns:
+
+```bash
+cp examples/.logger.jsonc ./.logger.jsonc
+bun run dev -- examples/mixed.log
+```
+
+Keybinding remaps and merge-sort remap example:
+
+```jsonc
+{
+  "columns": [
+    { "key": "client", "path": "$.client" }
+  ],
+  "keybindings": {
+    "toggleReverse": ["v"],
+    "cycleMergeSort": ["S"]
+  }
 }
+```
 
-const textEntry: LogEntry = {
-  id: 2,
-  sourceId: 'plain',
-  raw: 'plain text error happened',
-  kind: 'text',
-  level: 'unknown',
-  message: 'plain text error happened',
+Supported keybinding action ids:
+
+```text
+openHelp
+openFilter
+toggleReverse
+nextTab
+prevTab
+moveUp
+moveDown
+pageUp
+pageDown
+jumpTop
+jumpBottom
+enterDetail
+leaveDetail
+toggleFold
+detailSearch
+repeatSearchNext
+repeatSearchPrev
+copyValue
+copyPath
+toggleAnsi
+cycleMergeSort
+```
+
+Config lookup order:
+
+1. `--config path`
+2. `./.logger.jsonc`
+3. `$HOME/.config/logger/config.jsonc`
+
+Built CLI:
+
+```bash
+bun run build
+bun run start -- examples/mixed.log
+./bin/logger examples/mixed.log
+```
+
+Compiled executable:
+
+```bash
+bun run compile:exe
+./bin/logger examples/mixed.log
+```
+
+## Query Mode
+
+Query Mode is inspired by jnv.
+
+Mode switching:
+
+- `Shift+Down`: enter Query Mode
+- `Shift+Up`: return to Browse Mode
+
+In Query Mode:
+
+- a query editor appears at the top
+- a result pane appears underneath
+- if `queryMode.noHint` is not true, a hint line is shown
+
+Behavior:
+
+- if the selected entry is JSON, the query runs against that JSON value
+- if `A` is toggled in Query Mode, the query is applied to all JSON entries in the active source and results are shown as a list
+
+Query execution:
+
+- if `jq` is on `PATH`, `logger` will try to evaluate the query with `jq`
+- otherwise a minimal fallback is supported:
+  - `.`
+  - `.foo`
+  - `.foo[0]`
+
+Autocomplete:
+
+- suggestions are derived from the currently selected JSON object
+- `Tab` accepts the current suggestion
+
+Query Mode keybindings:
+
+- `Ctrl+Q`: copy query
+- `Ctrl+O`: copy current result
+- `Tab`: accept autocomplete
+- `Enter`: toggle fold when result is JSON
+- `Ctrl+P`: expand all JSON result folds
+- `Ctrl+N`: collapse all JSON result folds
+- `Esc`: leave Query Mode
+
+Example queries:
+
+```text
+.
+.request
+.request.method
+.items[0]
+```
+
+## Keybindings
+
+- `F` or `/`: open advanced filter bar
+- `1` trace toggle
+- `2` debug toggle
+- `3` info toggle
+- `4` warn toggle
+- `5` error toggle
+- `6` fatal toggle
+- `Up` / `Down` or `j` / `k`: move selection
+- `PgUp` / `PgDn`: page
+- `Home` / `End`: jump beginning/end
+- `g` / `G`: jump top/bottom
+- `Tab`: next source tab
+- `Shift+Tab`: previous source tab
+- `Enter`: toggle detail focus
+- `Esc`: leave detail focus / close help
+- `/`: open filter mode
+- `Space`: fold/unfold current JSON node in detail pane
+- `R`: reverse order
+- `M`: cycle merge sort in merged mode
+- `F1` or `?`: help
+- `q`: quit
+
+## Filter language
+
+Examples:
+
+```text
+request.method = "GET"
+request.method != "POST"
+latency >= 100 and latency < 500
+message ~= "timeout"
+message !~= "healthcheck"
+message like "err*"
+message ~~= "request\\s+failed"
+exists(.request.method)
+not exists(.request.user)
+level in ("warn","error","fatal")
+service not in ("metrics","health")
+.request.user? = "alice"
+(request.method = "GET" and level = "warn") or message ~= "panic"
+span.[].name = "db"
+span.[1].name = "http"
+```
+
+Supported operators:
+
+- `=`
+- `!=`
+- `>`
+- `>=`
+- `<`
+- `<=`
+- `~=`
+- `!~=`
+- `like`
+- `~~=`
+- `in (...)`
+- `not in (...)`
+- `exists(...)`
+- `not exists(...)`
+- `and`
+- `or`
+- `not`
+- parentheses
+
+Notes:
+
+- Dot paths target structured JSON fields, for example `request.method`
+- Leading-dot paths like `.field` always start from the parsed JSON object
+- `field? = value` means the field is optional: absent is treated as a match
+- Text entries can still be filtered through built-in fields like `message`
+
+## Main line templates
+
+Use `mainLineTemplate` in config to control the compact list row format.
+
+Available variables:
+
+- `timestamp`
+- `level`
+- `message`
+- `prefix`
+- `json`
+- `raw`
+
+Available helpers:
+
+- `bold`
+- `red`
+- `yellow`
+- `green`
+- `cyan`
+- `blue`
+- `purple`
+- `uppercase`
+- `fixed_size`
+- `min_size`
+- `level_style`
+
+Example:
+
+```jsonc
+{
+  "mainLineTemplate": "{{timestamp}} {{level_style (min_size level 5)}} {{prefix}}{{message}}",
+  "placeholderFormat": "#{key}",
+  "contextPath": "extra_data"
 }
+```
 
-test('advanced filter supports equality and inequality', () => {
-  assert.equal(matchesQuery(jsonEntry, parseQuery('request.method = "GET"')), true)
-  assert.equal(matchesQuery(jsonEntry, parseQuery('request.method != "POST"')), true)
-})
+Placeholder substitution example:
 
-test('advanced filter supports numeric comparisons', () => {
-  assert.equal(matchesQuery(jsonEntry, parseQuery('latency >= 40 and latency < 100')), true)
-})
+If `message` is:
 
-test('advanced filter supports substring, wildcard, and regex', () => {
-  assert.equal(matchesQuery(jsonEntry, parseQuery('message ~= "failed"')), true)
-  assert.equal(matchesQuery(jsonEntry, parseQuery('message like "request*"')), true)
-  assert.equal(matchesQuery(jsonEntry, parseQuery('message ~~= "request\\s+failed"')), true)
-})
+```text
+hello #{user}
+```
 
-test('advanced filter supports exists, set membership, optional fields, and boolean grouping', () => {
-  assert.equal(matchesQuery(jsonEntry, parseQuery('exists(.request.method)')), true)
-  assert.equal(matchesQuery(jsonEntry, parseQuery('request.method in ("GET","POST")')), true)
-  assert.equal(matchesQuery(jsonEntry, parseQuery('.missing? = "x"')), true)
-  assert.equal(matchesQuery(jsonEntry, parseQuery('(request.method = "GET" and not level = "info") or span.[1].name = "http"')), true)
-})
+and `json.extra_data.user` is `alice`, the rendered message becomes:
 
-test('advanced filter supports array wildcard paths', () => {
-  assert.equal(matchesQuery(jsonEntry, parseQuery('span.[].name = "db"')), true)
-})
+```text
+hello alice
+```
 
-test('advanced filter works for text entries through message fields', () => {
-  assert.equal(matchesQuery(textEntry, parseQuery('message ~= "error"')), true)
-})
+If `NO_COLOR` is set, the template helpers return plain text without ANSI styling.
 
-===== tests/main-line-template.test.ts =====
-import test from 'node:test'
-import assert from 'node:assert/strict'
-import { renderMainLine } from '../src/lib/format/mainLineTemplate.js'
-import type { LogEntry, LoggerConfig } from '../src/types.js'
+## Scripts
 
-const entry: LogEntry = {
-  id: 1,
-  sourceId: 'api',
-  raw: '{"message":"hello #{user}","extra_data":{"user":"alice"}}',
-  kind: 'json',
-  parsed: {
-    message: 'hello #{user}',
-    extra_data: { user: 'alice' },
-  },
-  level: 'info',
-  levelRaw: 'info',
-  message: 'hello #{user}',
-  time: '2026-04-21T19:00:00.000Z',
-}
+```bash
+bun run typecheck
+bun test
+bun run build
+bun run compile:exe
+```
 
-const config: LoggerConfig = {
-  columns: [],
-  keybindings: {},
-  mainLineTemplate: '{{uppercase level}} {{message}}',
-  placeholderFormat: '#{key}',
-  contextPath: 'extra_data',
-  levelMap: {},
-}
+## File Layout
 
-test('renderMainLine applies template helpers and placeholder substitution', () => {
-  const line = renderMainLine(entry, config)
-  assert.match(line, /INFO hello alice/)
-})
+- `src/main.tsx`: launch spine
+- `src/replLauncher.tsx`: shell handoff
+- `src/components/App.tsx`: providers
+- `src/screens/REPL.tsx`: TUI kernel
+- `src/QueryEngine.ts`: source/session facade
+- `src/query.ts`: view transform helpers
+- `src/lib/ingest`: sources and ring buffer
+- `src/lib/parse`: mixed JSON/text parsing
+- `src/lib/query`: interactive filter logic
+- `src/lib/config`: config loading

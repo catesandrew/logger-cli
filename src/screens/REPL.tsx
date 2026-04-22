@@ -7,19 +7,24 @@ import { FilterBar } from '../components/FilterBar.js'
 import { HelpModal } from '../components/HelpModal.js'
 import { JsonTree } from '../components/JsonTree.js'
 import { LogListRow } from '../components/LogListRow.js'
+import { QueryBar } from '../components/QueryBar.js'
+import { QueryResultView } from '../components/QueryResultView.js'
 import { RawTextView } from '../components/RawTextView.js'
 import { SearchBar } from '../components/SearchBar.js'
 import { StatusLine } from '../components/StatusLine.js'
 import { VirtualSelectableList } from '../components/VirtualSelectableList.js'
 import { useAppState, useAppStateStore } from '../state/AppState.js'
 import { useTerminalSize } from '../hooks/useTerminalSize.js'
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js'
 import { QueryEngine, type LoggerSession } from '../QueryEngine.js'
 import { clampIndex, getBottomIndex, shouldFollowSelection } from '../query.js'
 import { findJsonTreeMatch, findJsonTreeMatchWrapped, findTextMatchWrapped, getJsonTreeCopyValue } from '../lib/query/detailTools.js'
 import { matchesQuery, parseQuery } from '../lib/query/filter.js'
 import { splitHighlightedText } from '../lib/query/highlight.js'
 import { matchesBinding } from '../lib/query/keybindings.js'
-import type { JsonTreeLine, LoggerCliOptions, LogEntry } from '../types.js'
+import { getQueryAutocompleteSuggestion } from '../lib/queryMode/autocomplete.js'
+import { evaluateQuery } from '../lib/queryMode/evaluateQuery.js'
+import type { JsonTreeLine, LoggerCliOptions, LogEntry, QueryResultItem } from '../types.js'
 
 function flattenJson(value: unknown, foldState: Set<string>, path = '$', depth = 0, key?: string): JsonTreeLine[] {
   const isObject = value !== null && typeof value === 'object'
@@ -90,6 +95,12 @@ export function REPL(props: {
   const [lastDetailSearch, setLastDetailSearch] = useState('')
   const [preserveAnsi, setPreserveAnsi] = useState(props.options.preserveAnsi)
   const [levelFilter, setLevelFilter] = useState<Set<string>>(new Set())
+  const [queryModeText, setQueryModeText] = useState('.')
+  const [queryApplyAll, setQueryApplyAll] = useState(false)
+  const [queryResults, setQueryResults] = useState<QueryResultItem[]>([])
+  const [queryFoldState, setQueryFoldState] = useState<Set<string>>(new Set())
+  const [queryResultIndex, setQueryResultIndex] = useState(0)
+  const [queryResultTreeIndex, setQueryResultTreeIndex] = useState(0)
   const sessionRef = React.useRef<LoggerSession | null>(null)
 
   useEffect(() => {
@@ -119,6 +130,8 @@ export function REPL(props: {
   const activeSource = snapshot.sources[activeTabIndex]
   const columns = snapshot.config?.columns ?? []
   const mergedMode = Boolean(snapshot.merged && activeSource?.spec.id === 'merge-0')
+  const queryModeConfig = snapshot.config.queryMode ?? {}
+  const debouncedQuery = useDebouncedValue(queryModeText, queryModeConfig.debounceMs ?? 150)
   const allEntries = useMemo(
     () => (activeSource ? session?.getEntries(activeSource.spec.id, reverse, mergeSort) ?? [] : []),
     [session, activeSource?.spec.id, reverse, mergeSort, version],
@@ -151,6 +164,10 @@ export function REPL(props: {
   const treeLines = useMemo(
     () => (selectedEntry?.kind === 'json' ? flattenJson(selectedEntry.parsed, foldState) : []),
     [selectedEntry, foldState],
+  )
+  const querySuggestion = useMemo(
+    () => getQueryAutocompleteSuggestion(queryModeText, selectedEntry?.parsed),
+    [queryModeText, selectedEntry?.parsed],
   )
   const detailMatchCount = useMemo(() => {
     if (!detailSearchText) {
@@ -187,6 +204,26 @@ export function REPL(props: {
     return detailMatchCount > 0 ? 1 : 0
   }, [detailSearchText, selectedEntry, treeLines, detailCursorIndex, detailMatchCount])
 
+  useEffect(() => {
+    if (replMode !== 'query') return
+
+    const targets = queryApplyAll
+      ? activeEntries.filter((entry) => entry.kind === 'json')
+      : selectedEntry?.kind === 'json'
+        ? [selectedEntry]
+        : []
+
+    const results = targets.map<QueryResultItem>((entry) => ({
+      entryId: entry.id,
+      sourceId: entry.sourceId,
+      result: evaluateQuery(entry.parsed, debouncedQuery),
+    }))
+
+    setQueryResults(results)
+    setQueryResultIndex(0)
+    setQueryResultTreeIndex(0)
+  }, [replMode, debouncedQuery, queryApplyAll, activeEntries, selectedEntry])
+
   function moveSelection(delta: number) {
     store.setState((current) => {
       const nextIndex = clampIndex(current.selectedIndex + delta, activeEntries.length)
@@ -211,6 +248,15 @@ export function REPL(props: {
     const extendedKey = key as typeof key & { f1?: boolean; home?: boolean; end?: boolean }
     const config = snapshot.config
 
+    if (matchesBinding('nextMode', input, extendedKey, config)) {
+      store.setState({ replMode: replMode === 'browse' ? 'query' : 'browse' })
+      return
+    }
+    if (matchesBinding('prevMode', input, extendedKey, config)) {
+      store.setState({ replMode: replMode === 'query' ? 'browse' : 'query' })
+      return
+    }
+
     if (helpOpen) {
       if (key.escape || input === 'q' || matchesBinding('openHelp', input, extendedKey, config)) {
         store.setState({ helpOpen: false })
@@ -228,6 +274,73 @@ export function REPL(props: {
     if (replMode === 'detail-search') {
       if (key.escape) {
         store.setState({ replMode: 'browse' })
+      }
+      return
+    }
+
+    if (replMode === 'query') {
+      if (key.escape) {
+        store.setState({ replMode: 'browse' })
+        return
+      }
+      if (matchesBinding('copyQuery', input, extendedKey, config)) {
+        void clipboard.write(queryModeText)
+        store.setState({ statusLine: `Copied query: ${queryModeText}` })
+        return
+      }
+      if (matchesBinding('copyQueryResult', input, extendedKey, config)) {
+        const result = queryResults[queryResultIndex]
+        if (result) {
+          const text = typeof result.result === 'string' ? result.result : JSON.stringify(result.result, null, 2)
+          void clipboard.write(text)
+          store.setState({ statusLine: 'Copied query result' })
+        }
+        return
+      }
+      if (matchesBinding('acceptAutocomplete', input, extendedKey, config) && querySuggestion) {
+        setQueryModeText(querySuggestion)
+        return
+      }
+      if (input === 'A') {
+        setQueryApplyAll((current) => !current)
+        return
+      }
+      if (key.return) {
+        const selected = queryResults[queryResultIndex]
+        if (selected && selected.result && typeof selected.result === 'object') {
+          const line = flattenJson(selected.result, queryFoldState)[queryResultTreeIndex]
+          if (line?.collapsible) {
+            setQueryFoldState((current) => {
+              const next = new Set(current)
+              if (next.has(line.id)) next.delete(line.id)
+              else next.add(line.id)
+              return next
+            })
+          }
+        }
+        return
+      }
+      if (matchesBinding('expandAll', input, extendedKey, config)) {
+        setQueryFoldState(new Set())
+        return
+      }
+      if (matchesBinding('collapseAll', input, extendedKey, config)) {
+        const selected = queryResults[queryResultIndex]
+        if (selected && selected.result && typeof selected.result === 'object') {
+          const allIds = flattenJson(selected.result, new Set())
+            .filter((line) => line.collapsible)
+            .map((line) => line.id)
+          setQueryFoldState(new Set(allIds))
+        }
+        return
+      }
+      if (matchesBinding('moveUp', input, extendedKey, config)) {
+        setQueryResultIndex((current) => clampIndex(current - 1, queryResults.length))
+        return
+      }
+      if (matchesBinding('moveDown', input, extendedKey, config)) {
+        setQueryResultIndex((current) => clampIndex(current + 1, queryResults.length))
+        return
       }
       return
     }
@@ -463,6 +576,31 @@ export function REPL(props: {
         mergedMode={mergedMode}
         mergeSort={mergeSort}
       />
+      {replMode === 'query' ? (
+        <>
+          <QueryBar
+            value={queryModeText}
+            suggestion={querySuggestion}
+            focusGlyph={queryModeConfig.focusGlyph ?? '>'}
+            blurGlyph={queryModeConfig.blurGlyph ?? '-'}
+            onChange={setQueryModeText}
+            onSubmit={() => {
+              // Debounced evaluation runs via state effect.
+            }}
+          />
+          {!queryModeConfig.noHint ? (
+            <Text color="gray">
+              Query Mode: Ctrl+Q copy query, Ctrl+O copy result, Tab accept suggestion, A toggle apply-all.
+            </Text>
+          ) : null}
+          <QueryResultView
+            items={queryResults}
+            selectedIndex={queryResultIndex}
+            foldState={queryFoldState}
+            selectedTreeIndex={queryResultTreeIndex}
+          />
+        </>
+      ) : null}
       {replMode === 'filter' ? (
         <FilterBar
           value={queryText}
@@ -501,7 +639,8 @@ export function REPL(props: {
         />
       ) : null}
       {helpOpen ? <HelpModal /> : null}
-      <Box flexDirection="row">
+      {replMode !== 'query' ? (
+        <Box flexDirection="row">
         <Box flexDirection="column" width={listWidth}>
           <VirtualSelectableList
             items={activeEntries}
@@ -536,7 +675,8 @@ export function REPL(props: {
             <RawTextView text={selectedEntry.raw} searchText={detailSearchText} preserveAnsi={preserveAnsi} />
           )}
         </Box>
-      </Box>
+        </Box>
+      ) : null}
       <Footer
         follow={follow}
         paneFocus={paneFocus}

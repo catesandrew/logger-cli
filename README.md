@@ -133,6 +133,58 @@ bun run compile:exe
 ./bin/logger examples/mixed.log
 ```
 
+## Query Mode
+
+Query Mode is inspired by jnv.
+
+Mode switching:
+
+- `Shift+Down`: enter Query Mode
+- `Shift+Up`: return to Browse Mode
+
+In Query Mode:
+
+- a query editor appears at the top
+- a result pane appears underneath
+- if `queryMode.noHint` is not true, a hint line is shown
+
+Behavior:
+
+- if the selected entry is JSON, the query runs against that JSON value
+- if `A` is toggled in Query Mode, the query is applied to all JSON entries in the active source and results are shown as a list
+
+Query execution:
+
+- if `jq` is on `PATH`, `logger` will try to evaluate the query with `jq`
+- otherwise a minimal fallback is supported:
+  - `.`
+  - `.foo`
+  - `.foo[0]`
+
+Autocomplete:
+
+- suggestions are derived from the currently selected JSON object
+- `Tab` accepts the current suggestion
+
+Query Mode keybindings:
+
+- `Ctrl+Q`: copy query
+- `Ctrl+O`: copy current result
+- `Tab`: accept autocomplete
+- `Enter`: toggle fold when result is JSON
+- `Ctrl+P`: expand all JSON result folds
+- `Ctrl+N`: collapse all JSON result folds
+- `Esc`: leave Query Mode
+
+Example queries:
+
+```text
+.
+.request
+.request.method
+.items[0]
+```
+
 ## Keybindings
 
 - `F` or `/`: open advanced filter bar

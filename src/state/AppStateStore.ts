@@ -12,6 +12,7 @@ export interface AppState {
   mergeSort: 'time' | 'source'
   replMode: ReplMode
   queryText: string
+  queryApplyAll: boolean
   detailViewMode: DetailViewMode
   detailCursorIndex: number
 }
@@ -56,6 +57,7 @@ export function createInitialAppState(cwd: string): AppState {
     mergeSort: 'time',
     replMode: 'browse',
     queryText: '',
+    queryApplyAll: false,
     detailViewMode: 'tree',
     detailCursorIndex: 0,
   }

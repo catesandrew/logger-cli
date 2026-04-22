@@ -15,6 +15,12 @@ const ConfigSchema = z.object({
   placeholderFormat: z.string().optional(),
   contextPath: z.string().optional(),
   levelMap: LevelMapSchema.default({}),
+  queryMode: z.object({
+    debounceMs: z.number().optional(),
+    noHint: z.boolean().optional(),
+    focusGlyph: z.string().optional(),
+    blurGlyph: z.string().optional(),
+  }).optional(),
 })
 
 const DEFAULT_CONFIG: LoggerConfig = {
@@ -24,6 +30,12 @@ const DEFAULT_CONFIG: LoggerConfig = {
   placeholderFormat: '#{key}',
   contextPath: 'extra_data',
   levelMap: {},
+  queryMode: {
+    debounceMs: 150,
+    noHint: false,
+    focusGlyph: '>',
+    blurGlyph: '-',
+  },
 }
 
 function stripJsonComments(text: string): string {

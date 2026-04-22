@@ -34,6 +34,12 @@ export interface LoggerConfig {
   placeholderFormat?: string
   contextPath?: string
   levelMap?: Record<string, NormalizedLevel>
+  queryMode?: {
+    debounceMs?: number
+    noHint?: boolean
+    focusGlyph?: string
+    blurGlyph?: string
+  }
 }
 
 export interface LogEntry {
@@ -84,11 +90,13 @@ export interface LoggerSnapshot {
   merged: boolean
 }
 
-export type ReplMode = 'browse' | 'filter' | 'detail-search'
+export type ReplMode = 'browse' | 'filter' | 'detail-search' | 'query'
 
 export type KeyAction =
   | 'openHelp'
   | 'openFilter'
+  | 'nextMode'
+  | 'prevMode'
   | 'toggleReverse'
   | 'levelTrace'
   | 'levelDebug'
@@ -114,3 +122,14 @@ export type KeyAction =
   | 'copyPath'
   | 'toggleAnsi'
   | 'cycleMergeSort'
+  | 'copyQuery'
+  | 'copyQueryResult'
+  | 'acceptAutocomplete'
+  | 'expandAll'
+  | 'collapseAll'
+
+export interface QueryResultItem {
+  entryId: number
+  sourceId: string
+  result: unknown
+}
